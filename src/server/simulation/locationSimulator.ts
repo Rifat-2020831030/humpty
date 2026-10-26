@@ -145,9 +145,9 @@ export function startDriverSimulation(
         eventBus.emit('ARRIVED_AT_PICKUP', statusPayload);
 
         db.ride
-          ?.findUnique({ where: { id: rideId }, select: { id: true } })
+          ?.findUnique({ where: { id: rideId }, select: { id: true, status: true } })
           .then(ride => {
-            if (ride) {
+            if (ride && ride.status === 'DRIVER_EN_ROUTE') {
               return db.ride.update({
                 where: { id: rideId },
                 data: { status: 'ARRIVED_AT_PICKUP' },
