@@ -1,0 +1,42 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Ride {
+  id                  String        @id @default(cuid())
+  status              String        @default("SEARCHING")
+  vehicleType         String
+  pickupLat           Float
+  pickupLng           Float
+  pickupAddress       String
+  dropoffLat          Float
+  dropoffLng          Float
+  dropoffAddress      String
+  fareEstimate        Float
+  fareFinal           Float?
+  distanceKm          Float
+  riderSessionId      String
+  driverSessionId     String?
+  driverName          String?
+  driverVehicle       String?
+  driverPlate         String?
+  driverRating        Float?        @default(4.8)
+  driverRatingByRider Int?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  messages            ChatMessage[]
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  rideId     String
+  senderRole String
+  text       String
+  createdAt  DateTime @default(now())
+  ride       Ride     @relation(fields: [rideId], references: [id])
+}

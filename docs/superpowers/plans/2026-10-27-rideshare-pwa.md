@@ -42,49 +42,11 @@
 - Consumes: None
 - Produces: Base project structure, PWA manifest configuration, shared domain types (`RideStatus`, `VehicleType`, `Role`, `LocationResult`, `DriverProfile`).
 
-- [ ] **Step 1: Write the failing test for project configuration & types**
-
-```typescript
-// tests/config.test.ts
-import { describe, it, expect } from 'vitest';
-import manifest from '../public/manifest.json';
-import { VEHICLE_TYPES, RIDE_STATUSES } from '../src/types';
-
-describe('Project Configuration & Manifest', () => {
-  it('should have valid PWA manifest properties', () => {
-    expect(manifest.name).toBe('GariKoi');
-    expect(manifest.short_name).toBe('GariKoi');
-    expect(manifest.display).toBe('standalone');
-    expect(manifest.theme_color).toBe('#000000');
-  });
-
-  it('should export all core vehicle types and ride statuses', () => {
-    expect(VEHICLE_TYPES).toContain('BIKE');
-    expect(VEHICLE_TYPES).toContain('CNG');
-    expect(VEHICLE_TYPES).toContain('CAR');
-    expect(RIDE_STATUSES).toContain('SEARCHING');
-    expect(RIDE_STATUSES).toContain('DRIVER_ASSIGNED');
-    expect(RIDE_STATUSES).toContain('COMPLETED');
-  });
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `pnpm test`
-Expected: FAIL (files missing or modules not found)
-
-- [ ] **Step 3: Initialize Next.js project and install dependencies**
-
-Install dependencies outside sandbox: `next`, `react`, `react-dom`, `@trpc/server`, `@trpc/client`, `@trpc/react-query`, `@tanstack/react-query`, `@prisma/client`, `prisma`, `maplibre-gl`, `lucide-react`, `clsx`, `tailwind-merge`, `superjson`, `zod`, `vitest`.
-Configure `public/manifest.json`, `tailwind.config.ts`, `src/types/index.ts`, and `vitest.config.ts`.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `pnpm test tests/config.test.ts`
-Expected: PASS
-
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Write the failing test for project configuration & types**
+- [x] **Step 2: Run test to verify it fails**
+- [x] **Step 3: Initialize Next.js project and install dependencies**
+- [x] **Step 4: Run test to verify it passes**
+- [x] **Step 5: Commit**
 
 ```bash
 git add package.json tsconfig.json next.config.mjs tailwind.config.ts postcss.config.mjs public/ tests/ src/types/ vitest.config.ts pnpm-lock.yaml
@@ -108,67 +70,11 @@ git commit -m "chore: scaffold Next.js PWA project with types and test runner"
   - `interpolatePath(points: [number, number][], stepsPerSegment: number): [number, number][]`
   - Prisma client singleton `db` with `Ride` and `ChatMessage` models.
 
-- [ ] **Step 1: Write the failing test for Geo and Fare calculations**
-
-```typescript
-// tests/lib/geo-fare.test.ts
-import { describe, it, expect } from 'vitest';
-import { calculateDistance, calculateBearing, interpolatePath } from '../../src/lib/geo';
-import { calculateFare } from '../../src/lib/fare';
-
-describe('Geo & Fare Utilities', () => {
-  it('calculates accurate Haversine distance between Dhaka landmarks', () => {
-    // Gulshan 2 (23.7938, 90.4143) to Mohakhali (23.7831, 90.3977) is ~2 km
-    const dist = calculateDistance(23.7938, 90.4143, 23.7831, 90.3977);
-    expect(dist).toBeGreaterThan(1.5);
-    expect(dist).toBeLessThan(2.5);
-  });
-
-  it('calculates bearing angle between 0 and 360', () => {
-    const bearing = calculateBearing(23.7938, 90.4143, 23.7831, 90.3977);
-    expect(bearing).toBeGreaterThanOrEqual(0);
-    expect(bearing).toBeLessThanOrEqual(360);
-  });
-
-  it('calculates fares respecting min fares and rates', () => {
-    // Bike: base 30, rate 12, min 50
-    const shortRide = calculateFare('BIKE', 0.5);
-    expect(shortRide.totalFare).toBe(50); // hits min fare
-
-    const longRide = calculateFare('BIKE', 10);
-    // 30 + 10 * 1.3 * 12 = 30 + 156 = 186
-    expect(longRide.totalFare).toBe(186);
-  });
-
-  it('interpolates intermediate coordinates along waypoints', () => {
-    const path: [number, number][] = [[23.79, 90.41], [23.80, 90.42]];
-    const interpolated = interpolatePath(path, 4);
-    expect(interpolated.length).toBe(5);
-    expect(interpolated[0]).toEqual(path[0]);
-    expect(interpolated[4]).toEqual(path[1]);
-  });
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `pnpm test tests/lib/geo-fare.test.ts`
-Expected: FAIL (modules not found)
-
-- [ ] **Step 3: Implement Geo, Fare utilities, Prisma schema, and DB client**
-
-Create `prisma/schema.prisma` with `Ride` and `ChatMessage` models per spec §16.
-Implement `src/lib/geo.ts` with Haversine formula, bearing math, and polyline linear interpolation.
-Implement `src/lib/fare.ts` with vehicle rates (`BIKE`, `CNG`, `CAR`) and min fares.
-Implement `src/lib/constants.ts` with Dhaka default center `[23.8103, 90.4125]` and 5 seed driver profiles.
-Run `pnpm prisma db push` to generate SQLite database and Prisma client.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `pnpm test tests/lib/geo-fare.test.ts`
-Expected: PASS
-
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Write the failing test for Geo and Fare calculations**
+- [x] **Step 2: Run test to verify it fails**
+- [x] **Step 3: Implement Geo, Fare utilities, Prisma schema, and DB client**
+- [x] **Step 4: Run test to verify it passes**
+- [x] **Step 5: Commit**
 
 ```bash
 git add prisma/ src/lib/ src/server/db.ts tests/lib/geo-fare.test.ts
