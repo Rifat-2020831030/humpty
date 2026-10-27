@@ -15,6 +15,7 @@ import {
   startDriverSimulation,
   stopDriverSimulation,
   updateDriverLocation as simulateDriverLocation,
+  getLatestDriverLocation,
 } from '../simulation/locationSimulator';
 import { heatmapStore } from '../density/heatmapStore';
 import { observable } from '@trpc/server/observable';
@@ -624,6 +625,39 @@ export const rideRouter = router({
       }
 
       return ride;
+    }),
+
+  getPending: publicProcedure
+    .input(
+      z
+        .object({
+          vehicleType: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const database = getDb(ctx);
+      const where: any = {
+        status: 'SEARCHING',
+      };
+      if (input?.vehicleType) {
+        where.vehicleType = input.vehicleType;
+      }
+      const ride = await database.ride.findFirst({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+      return ride;
+    }),
+
+  getDriverLocation: publicProcedure
+    .input(
+      z.object({
+        rideId: z.string(),
+      })
+    )
+    .query(({ input }) => {
+      return getLatestDriverLocation(input.rideId);
     }),
 
   onStatusChange: publicProcedure

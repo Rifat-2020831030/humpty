@@ -5,7 +5,7 @@ import { trpc } from '../../trpc/client';
 import { useSession } from '../../hooks/useSession';
 import { useLocation } from '../../hooks/useLocation';
 import { DHAKA_CENTER, SEED_DRIVERS } from '../../lib/constants';
-import { calculateDistance } from '../../lib/geo';
+import { calculateDistance, calculateBearing } from '../../lib/geo';
 import { calculateFare, VEHICLE_RATES } from '../../lib/fare';
 import { VehicleType, RideStatus, LocationResult } from '../../types';
 import {
@@ -84,6 +84,10 @@ function RiderContent() {
   // Active Ride & Driver tracking
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
   const [rideStatus, setRideStatus] = useState<RideStatus | null>(null);
+  const isTripActive = Boolean(
+    rideStatus &&
+    ['DRIVER_ASSIGNED', 'DRIVER_EN_ROUTE', 'ARRIVED_AT_PICKUP'].includes(rideStatus)
+  );
   const [driverCoord, setDriverCoord] = useState<{ lat: number; lng: number; bearing?: number } | null>(null);
 
   // Chat Drawer State
@@ -106,6 +110,9 @@ function RiderContent() {
   const aiSearchMutation = trpc.location.aiSearch.useMutation();
   const sendMessageMutation = trpc.chat.sendMessage.useMutation();
   const autoAssignMutation = trpc.ride.autoAssign.useMutation();
+  const arrivedMutation = trpc.ride.arrivedAtPickup.useMutation();
+  const startTripMutation = trpc.ride.startTrip.useMutation();
+  const completeTripMutation = trpc.ride.completeTrip.useMutation();
 
   // Chat messages query
   const chatMessagesQuery = trpc.chat.getMessages.useQuery(
@@ -159,32 +166,120 @@ function RiderContent() {
     }
   }, [userLocation]);
 
-  // Subscriptions for status and driver location
-  trpc.ride.onStatusChange.useSubscription(
-    { rideId: activeRideId || '' },
+  // HTTP Polling for active ride status (1.5s interval)
+  const currentRideQuery = trpc.ride.getById.useQuery(
+    { id: activeRideId || '' },
     {
       enabled: Boolean(activeRideId),
-      onData(data) {
-        if (data.status) {
-          setRideStatus(data.status as RideStatus);
-        }
-      },
+      refetchInterval: 1500,
     }
   );
 
-  trpc.ride.onDriverLocation.useSubscription(
+  useEffect(() => {
+    if (currentRideQuery.data?.status) {
+      setRideStatus(currentRideQuery.data.status as RideStatus);
+    }
+  }, [currentRideQuery.data?.status]);
+
+  // HTTP Polling for simulated driver location from server
+  const driverLocQuery = trpc.ride.getDriverLocation.useQuery(
     { rideId: activeRideId || '' },
     {
-      enabled: Boolean(activeRideId),
-      onData(data) {
-        setDriverCoord({
-          lat: data.lat,
-          lng: data.lng,
-          bearing: data.bearing,
-        });
-      },
+      enabled: Boolean(activeRideId && isTripActive),
+      refetchInterval: 1000,
     }
   );
+
+  useEffect(() => {
+    if (driverLocQuery.data) {
+      setDriverCoord({
+        lat: driverLocQuery.data.lat,
+        lng: driverLocQuery.data.lng,
+        bearing: driverLocQuery.data.bearing,
+      });
+    }
+  }, [driverLocQuery.data]);
+
+  // Local simulated driver movement along route for smooth demo
+  useEffect(() => {
+    if (!activeRideId || !pickupCoord) return;
+
+    // Phase 1: Driver approaching pickup
+    if (rideStatus === 'DRIVER_ASSIGNED' || rideStatus === 'DRIVER_EN_ROUTE') {
+      if (!driverCoord) {
+        setDriverCoord({
+          lat: pickupCoord.lat + 0.005,
+          lng: pickupCoord.lng + 0.004,
+          bearing: calculateBearing(
+            pickupCoord.lat + 0.005,
+            pickupCoord.lng + 0.004,
+            pickupCoord.lat,
+            pickupCoord.lng
+          ),
+        });
+        return;
+      }
+
+      const timer = setInterval(() => {
+        setDriverCoord((prev) => {
+          if (!prev) return prev;
+          const distKm = calculateDistance(prev.lat, prev.lng, pickupCoord.lat, pickupCoord.lng);
+          if (distKm <= 0.035) {
+            setRideStatus('ARRIVED_AT_PICKUP');
+            arrivedMutation.mutate({ rideId: activeRideId });
+            return { lat: pickupCoord.lat, lng: pickupCoord.lng, bearing: prev.bearing };
+          }
+          const step = 0.16;
+          const nextLat = prev.lat + (pickupCoord.lat - prev.lat) * step;
+          const nextLng = prev.lng + (pickupCoord.lng - prev.lng) * step;
+          const bearing = calculateBearing(prev.lat, prev.lng, pickupCoord.lat, pickupCoord.lng);
+          return { lat: nextLat, lng: nextLng, bearing };
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+
+    // Phase 2: Driver arrived at pickup -> automatically start trip after 3.5s in demo
+    if (rideStatus === 'ARRIVED_AT_PICKUP') {
+      const startTimer = setTimeout(() => {
+        setRideStatus('IN_PROGRESS');
+        startTripMutation.mutate({ rideId: activeRideId });
+      }, 3500);
+      return () => clearTimeout(startTimer);
+    }
+
+    // Phase 3: Trip in progress towards dropoff
+    if (rideStatus === 'IN_PROGRESS' && dropoffCoord) {
+      const timer = setInterval(() => {
+        setDriverCoord((prev) => {
+          if (!prev) return prev;
+          const distKm = calculateDistance(prev.lat, prev.lng, dropoffCoord.lat, dropoffCoord.lng);
+          if (distKm <= 0.035) {
+            setRideStatus('COMPLETED');
+            completeTripMutation.mutate({ rideId: activeRideId });
+            return { lat: dropoffCoord.lat, lng: dropoffCoord.lng, bearing: prev.bearing };
+          }
+          const step = 0.14;
+          const nextLat = prev.lat + (dropoffCoord.lat - prev.lat) * step;
+          const nextLng = prev.lng + (dropoffCoord.lng - prev.lng) * step;
+          const bearing = calculateBearing(prev.lat, prev.lng, dropoffCoord.lat, dropoffCoord.lng);
+          return { lat: nextLat, lng: nextLng, bearing };
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [
+    rideStatus,
+    activeRideId,
+    pickupCoord,
+    dropoffCoord,
+    driverCoord,
+    arrivedMutation,
+    startTripMutation,
+    completeTripMutation,
+  ]);
 
   // Matched Driver Details
   const matchedDriver = useMemo(() => {
@@ -388,11 +483,6 @@ function RiderContent() {
     }
   };
 
-  const isTripActive = Boolean(
-    rideStatus &&
-    ['DRIVER_ASSIGNED', 'DRIVER_EN_ROUTE', 'ARRIVED_AT_PICKUP'].includes(rideStatus)
-  );
-
   return (
     <main className="relative w-full h-screen overflow-hidden bg-black text-white flex flex-col font-sans select-none">
       {/* Central Interactive Map Area */}
@@ -460,7 +550,7 @@ function RiderContent() {
               )}
 
               {/* Driver Marker during active ride or seed drivers on Home */}
-              {isTripActive && driverCoord ? (
+              {(isTripActive || rideStatus === 'IN_PROGRESS') && driverCoord ? (
                 <DriverMarker
                   position={[driverCoord.lat, driverCoord.lng]}
                   bearing={driverCoord.bearing || 0}

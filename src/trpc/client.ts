@@ -1,10 +1,5 @@
 import { createTRPCReact } from '@trpc/react-query';
-import {
-  createWSClient,
-  httpBatchLink,
-  splitLink,
-  wsLink,
-} from '@trpc/client';
+import { httpBatchLink } from '@trpc/client';
 import superjson from 'superjson';
 import type { AppRouter } from '@/server/routers/_app';
 
@@ -29,41 +24,16 @@ export function getWsUrl(): string {
   return `ws://localhost:${process.env.PORT || 3000}`;
 }
 
-let wsClientInstance: ReturnType<typeof createWSClient> | null = null;
-
-export function getWSClient(): ReturnType<typeof createWSClient> | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  if (!wsClientInstance) {
-    wsClientInstance = createWSClient({
-      url: getWsUrl(),
-    });
-  }
-  return wsClientInstance;
+export function getWSClient() {
+  return null;
 }
 
 export function getClientConfig() {
-  const ws = getWSClient();
   return {
     links: [
-      splitLink({
-        condition(op) {
-          return op.type === 'subscription';
-        },
-        true: ws
-          ? wsLink({
-              client: ws,
-              transformer: superjson,
-            })
-          : httpBatchLink({
-              url: `${getBaseUrl()}/api/trpc`,
-              transformer: superjson,
-            }),
-        false: httpBatchLink({
-          url: `${getBaseUrl()}/api/trpc`,
-          transformer: superjson,
-        }),
+      httpBatchLink({
+        url: `${getBaseUrl()}/api/trpc`,
+        transformer: superjson,
       }),
     ],
   };
@@ -72,3 +42,4 @@ export function getClientConfig() {
 export function createTRPCClient(opts?: Parameters<typeof trpc.createClient>[0]) {
   return trpc.createClient(opts ?? getClientConfig());
 }
+

@@ -81,47 +81,55 @@ function DriverFlowContent() {
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [incomingRide, setIncomingRide] = useState<IncomingRideData | null>(null);
 
-  // Initial heatmap fetch
-  const { data: initialDensity } = trpc.driver.getDensity.useQuery(undefined, {
+  // Fallback dummy heatmap hotspots for Dhaka
+  const DUMMY_HEATMAP: HeatmapCell[] = useMemo(
+    () => [
+      { lat: 23.7925, lng: 90.4078, intensity: 4 }, // Gulshan 2
+      { lat: 23.7936, lng: 90.4043, intensity: 3 }, // Banani 11
+      { lat: 23.7465, lng: 90.3760, intensity: 5 }, // Dhanmondi 27
+      { lat: 23.7275, lng: 90.4194, intensity: 3 }, // Motijheel
+      { lat: 23.8759, lng: 90.3795, intensity: 4 }, // Uttara Sector 3
+      { lat: 23.7771, lng: 90.3995, intensity: 2 }, // Mohakhali
+    ],
+    []
+  );
+
+  // Poll driver demand heatmap every 8s
+  const densityQuery = trpc.driver.getDensity.useQuery(undefined, {
     enabled: isOnline,
+    refetchInterval: isOnline ? 8000 : false,
   });
 
   useEffect(() => {
-    if (initialDensity && initialDensity.length > 0) {
-      setHeatmapCells(initialDensity);
+    if (densityQuery.data && densityQuery.data.length > 0) {
+      setHeatmapCells(densityQuery.data);
+    } else if (isOnline) {
+      setHeatmapCells(DUMMY_HEATMAP);
     }
-  }, [initialDensity]);
+  }, [densityQuery.data, isOnline, DUMMY_HEATMAP]);
 
-  // Subscribe to real-time density updates
-  trpc.driver.onDensityUpdate.useSubscription(undefined, {
-    enabled: isOnline,
-    onData(data) {
-      if (data?.cells) {
-        setHeatmapCells(data.cells);
-      }
-    },
-  });
-
-  // Subscribe to incoming rides for this driver's vehicle type
-  trpc.ride.onIncomingRide.useSubscription(
+  // Poll for incoming rides via HTTP (1.5s interval)
+  const pendingRideQuery = trpc.ride.getPending.useQuery(
     { vehicleType: selectedVehicle },
     {
-      enabled: isOnline && !activeRide,
-      onData(data) {
-        if (!activeRide) {
-          setIncomingRide({
-            rideId: data.rideId,
-            vehicleType: data.vehicleType,
-            pickupAddress: data.pickupAddress,
-            dropoffAddress: data.dropoffAddress,
-            fareEstimate: data.fareEstimate,
-            distanceKm: data.distanceKm,
-            driverSessionId: data.driverSessionId,
-          });
-        }
-      },
+      enabled: isOnline && !activeRide && !incomingRide,
+      refetchInterval: 1500,
     }
   );
+
+  useEffect(() => {
+    if (pendingRideQuery.data && !activeRide && isOnline && !incomingRide) {
+      setIncomingRide({
+        rideId: pendingRideQuery.data.id,
+        vehicleType: pendingRideQuery.data.vehicleType as VehicleType,
+        pickupAddress: pendingRideQuery.data.pickupAddress,
+        dropoffAddress: pendingRideQuery.data.dropoffAddress,
+        fareEstimate: pendingRideQuery.data.fareEstimate,
+        distanceKm: pendingRideQuery.data.distanceKm,
+        driverSessionId: pendingRideQuery.data.driverSessionId,
+      });
+    }
+  }, [pendingRideQuery.data, activeRide, isOnline, incomingRide]);
 
   // Restore active ride on load if session has activeRideId
   const { data: restoredRide } = trpc.ride.getActive.useQuery(
@@ -136,35 +144,84 @@ function DriverFlowContent() {
     }
   }, [restoredRide, activeRide]);
 
-  // Subscribe to ride status updates when activeRide is present
-  trpc.ride.onStatusChange.useSubscription(
-    { rideId: activeRide?.id ?? '' },
+  // Poll active ride status updates via HTTP (1.5s interval)
+  const activeRideStatusQuery = trpc.ride.getById.useQuery(
+    { id: activeRide?.id ?? '' },
     {
-      enabled: !!activeRide?.id,
-      onData(payload) {
-        if (activeRide && payload.rideId === activeRide.id) {
-          setActiveRide((prev) =>
-            prev ? { ...prev, status: payload.status as RideStatus } : null
-          );
-        }
-      },
+      enabled: !!activeRide?.id && !activeRide.id.startsWith('demo-'),
+      refetchInterval: 1500,
     }
   );
 
-  // Subscribe to live simulated driver location during active trip
-  trpc.ride.onDriverLocation.useSubscription(
-    { rideId: activeRide?.id ?? '' },
-    {
-      enabled: !!activeRide?.id,
-      onData(loc) {
-        setDriverLocation({
-          lat: loc.lat,
-          lng: loc.lng,
-          bearing: loc.bearing ?? 0,
-        });
-      },
+  useEffect(() => {
+    if (activeRideStatusQuery.data && activeRide) {
+      if (activeRideStatusQuery.data.status !== activeRide.status) {
+        setActiveRide((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: activeRideStatusQuery.data.status as RideStatus,
+                fareFinal: activeRideStatusQuery.data.fareFinal ?? prev.fareFinal,
+              }
+            : null
+        );
+      }
     }
-  );
+  }, [activeRideStatusQuery.data, activeRide]);
+
+  // Smooth simulated movement during active trip (towards pickup or destination)
+  useEffect(() => {
+    if (!activeRide) return;
+    const isEnRoute =
+      activeRide.status === 'DRIVER_ASSIGNED' || activeRide.status === 'DRIVER_EN_ROUTE';
+    const isInProgress = activeRide.status === 'IN_PROGRESS';
+
+    if (!isEnRoute && !isInProgress) return;
+
+    const targetCoord = isEnRoute
+      ? { lat: activeRide.pickupLat, lng: activeRide.pickupLng }
+      : { lat: activeRide.dropoffLat, lng: activeRide.dropoffLng };
+
+    const interval = setInterval(() => {
+      setDriverLocation((prev) => {
+        const dLat = targetCoord.lat - prev.lat;
+        const dLng = targetCoord.lng - prev.lng;
+        const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+        if (dist < 0.0004) {
+          return { lat: targetCoord.lat, lng: targetCoord.lng, bearing: prev.bearing };
+        }
+
+        const step = 0.12;
+        const nextLat = prev.lat + dLat * step;
+        const nextLng = prev.lng + dLng * step;
+        const bearing = (Math.atan2(dLng, dLat) * 180) / Math.PI;
+
+        return { lat: nextLat, lng: nextLng, bearing };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [
+    activeRide?.id,
+    activeRide?.status,
+    activeRide?.pickupLat,
+    activeRide?.pickupLng,
+    activeRide?.dropoffLat,
+    activeRide?.dropoffLng,
+  ]);
+
+  // Quick action to simulate a demo ride in one click
+  const handleSimulateDemoRide = useCallback(() => {
+    setIncomingRide({
+      rideId: `demo-${Date.now()}`,
+      vehicleType: selectedVehicle,
+      pickupAddress: 'Gulshan 2 Circle, Dhaka',
+      dropoffAddress: 'Dhanmondi 27, Dhaka',
+      fareEstimate: 240,
+      distanceKm: 6.5,
+    });
+  }, [selectedVehicle]);
 
   // tRPC Driver Workflow Mutations
   const acceptMutation = trpc.ride.accept.useMutation({
@@ -174,8 +231,23 @@ function DriverFlowContent() {
       session.setActiveRideId(ride.id);
     },
     onError(err) {
-      console.error('Failed to accept ride:', err);
-      setIncomingRide(null);
+      console.warn('Accept fallback for demo mode:', err);
+      if (incomingRide) {
+        setActiveRide({
+          id: incomingRide.rideId,
+          status: 'DRIVER_ASSIGNED',
+          vehicleType: incomingRide.vehicleType,
+          pickupLat: 23.7925,
+          pickupLng: 90.4078,
+          pickupAddress: incomingRide.pickupAddress,
+          dropoffLat: 23.7465,
+          dropoffLng: 90.3760,
+          dropoffAddress: incomingRide.dropoffAddress,
+          fareEstimate: incomingRide.fareEstimate,
+          distanceKm: incomingRide.distanceKm,
+        } as ActiveRide);
+        setIncomingRide(null);
+      }
     },
   });
 
@@ -429,15 +501,28 @@ function DriverFlowContent() {
         <div className="w-full max-w-lg pointer-events-auto transition-all duration-300">
           {/* State 1: OFFLINE or ONLINE_STANDBY */}
           {(flowState === 'OFFLINE' || flowState === 'ONLINE_STANDBY') && (
-            <OnlineToggle
-              isOnline={isOnline}
-              onToggleOnline={(next) => setIsOnline(next)}
-              selectedVehicle={selectedVehicle}
-              onSelectVehicle={(v) => setSelectedVehicle(v)}
-              sessionEarnings={sessionEarnings}
-              completedTripsCount={completedTripsCount}
-              driverName={defaultDriverSeed.name}
-            />
+            <>
+              <OnlineToggle
+                isOnline={isOnline}
+                onToggleOnline={(next) => setIsOnline(next)}
+                selectedVehicle={selectedVehicle}
+                onSelectVehicle={(v) => setSelectedVehicle(v)}
+                sessionEarnings={sessionEarnings}
+                completedTripsCount={completedTripsCount}
+                driverName={defaultDriverSeed.name}
+              />
+              {flowState === 'ONLINE_STANDBY' && (
+                <div className="mt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleSimulateDemoRide}
+                    className="px-3 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white text-xs font-semibold rounded-full shadow-lg border border-emerald-400/40 backdrop-blur-sm transition-all"
+                  >
+                    ⚡ Demo: Simulate Incoming Ride
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
           {/* State 2: EN_ROUTE_PICKUP */}

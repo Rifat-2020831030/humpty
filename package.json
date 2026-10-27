@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "next dev",
     "build": "next build",
-    "start": "cross-env NODE_ENV=production tsx server.ts",
+    "start": "next start",
     "lint": "next lint",
     "test": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vitest run --no-file-parallelism",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:ws": "tsx server.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
@@ -44,4 +45,3 @@
     "vitest": "^3.0.7"
   }
 }
-

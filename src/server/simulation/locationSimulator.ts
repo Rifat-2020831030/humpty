@@ -4,9 +4,14 @@ import { db } from '../db';
 import { DHAKA_ROUTES, findNearestRoute } from './dhakaRoutes';
 
 const activeSimulations = new Map<string, NodeJS.Timeout>();
+const latestDriverLocations = new Map<string, DriverLocationPayload>();
 
 export function getActiveSimulations(): Map<string, NodeJS.Timeout> {
   return activeSimulations;
+}
+
+export function getLatestDriverLocation(rideId: string): DriverLocationPayload | null {
+  return latestDriverLocations.get(rideId) ?? null;
 }
 
 export function stopDriverSimulation(rideId: string): void {
@@ -15,6 +20,7 @@ export function stopDriverSimulation(rideId: string): void {
     clearInterval(timer);
     activeSimulations.delete(rideId);
   }
+  latestDriverLocations.delete(rideId);
 }
 
 /**
@@ -129,6 +135,8 @@ export function startDriverSimulation(
       speed,
     };
 
+    latestDriverLocations.set(rideId, payload);
+
     // Emit driver location event to specific ride channel and global channel
     eventBus.emit(`driverLocation:${rideId}`, payload);
     eventBus.emit('driverLocation', payload);
@@ -179,6 +187,7 @@ export function updateDriverLocation(
   speed: number = 0
 ): void {
   const payload: DriverLocationPayload = { rideId, lat, lng, bearing, speed };
+  latestDriverLocations.set(rideId, payload);
   eventBus.emit(`driverLocation:${rideId}`, payload);
   eventBus.emit('driverLocation', payload);
 }

@@ -42,10 +42,10 @@ export function ChatPanel({
 
   const utils = trpc.useUtils();
 
-  // Load message history
+  // Load message history with 1.5s short polling
   const historyQuery = trpc.chat.getMessages.useQuery(
     { rideId },
-    { enabled: isOpen && !!rideId }
+    { enabled: isOpen && !!rideId, refetchInterval: 1500 }
   );
 
   useEffect(() => {
@@ -58,20 +58,6 @@ export function ChatPanel({
       );
     }
   }, [historyQuery.data]);
-
-  // Subscribe to real-time new messages
-  trpc.chat.onMessage.useSubscription(
-    { rideId },
-    {
-      enabled: isOpen && !!rideId,
-      onData(newMsg: ChatMessageItem) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-      },
-    }
-  );
 
   // Auto-scroll on new messages
   useEffect(() => {
