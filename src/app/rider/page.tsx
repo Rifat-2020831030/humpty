@@ -340,6 +340,7 @@ function RiderContent() {
           {/* Pickup Marker */}
           <LocationPicker
             currentPin={pickupCoord}
+            label="Pickup"
             onPinChange={(pos: { lat: number; lng: number }) => {
               setPickupCoord({ lat: pos.lat, lng: pos.lng });
               setManualPin(pos.lat, pos.lng);
@@ -350,6 +351,7 @@ function RiderContent() {
           {dropoffCoord && (
             <LocationPicker
               currentPin={dropoffCoord}
+              label="Dropoff"
             />
           )}
 

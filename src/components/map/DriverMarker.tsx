@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import { VehicleType } from '../../types';
 import { useMap } from './MapBase';
@@ -76,7 +76,7 @@ export function DriverMarker({
     ? toLatLng(position)
     : [position.lat, position.lng];
 
-  // Initialize marker DOM element and attach to map
+  // Initialize WebGL marker DOM element and attach to map
   useEffect(() => {
     if (!map) return;
 
@@ -89,7 +89,7 @@ export function DriverMarker({
       <div class="relative flex items-center justify-center">
         <!-- Directional arrow pointer -->
         <div class="driver-marker-rotator transition-transform duration-300 ease-out" style="transform: rotate(${bearing}deg);">
-          <div class="w-10 h-10 rounded-full bg-slate-900 border-2 border-emerald-400 shadow-xl flex items-center justify-center text-emerald-400">
+          <div class="w-10 h-10 rounded-full bg-neutral-900 border-2 border-emerald-400 shadow-xl flex items-center justify-center text-emerald-400">
             ${getVehicleIconSvg(vehicleType)}
           </div>
           <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-emerald-400"></div>
@@ -102,7 +102,9 @@ export function DriverMarker({
     }
 
     elementRef.current = el;
-    iconWrapperRef.current = el.querySelector('.driver-marker-rotator') as HTMLDivElement;
+    iconWrapperRef.current = el.querySelector(
+      '.driver-marker-rotator'
+    ) as HTMLDivElement;
 
     const [currentLng, currentLat] = toLngLat(lat, lng);
     const marker = new maplibregl.Marker({
@@ -125,15 +127,16 @@ export function DriverMarker({
     };
   }, [map, vehicleType, id]);
 
-  // Update bearing rotation
+  // Update bearing rotation in WebGL mode
   useEffect(() => {
     if (iconWrapperRef.current) {
       iconWrapperRef.current.style.transform = `rotate(${bearing}deg)`;
     }
   }, [bearing]);
 
-  // Smooth position interpolation on updates
+  // Smooth position interpolation on updates in WebGL mode
   useEffect(() => {
+    if (!map) return;
     const nextPos: [number, number] = [lat, lng];
     const prevPos = targetPosRef.current;
     targetPosRef.current = nextPos;
@@ -186,7 +189,35 @@ export function DriverMarker({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [lat, lng]);
+  }, [lat, lng, map]);
+
+  // Fallback 2D render if map is null but context.project exists
+  if (!map && context.project) {
+    const coords = context.project({ lat, lng });
+    if (!coords) return null;
+    return (
+      <div
+        id={id}
+        onClick={onClick}
+        className="absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 pointer-events-auto"
+        style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
+      >
+        <div
+          className="transition-transform duration-300 ease-out"
+          style={{ transform: `rotate(${bearing}deg)` }}
+        >
+          <div className="w-9 h-9 rounded-full bg-neutral-900 border-2 border-emerald-400 shadow-xl flex items-center justify-center text-emerald-400">
+            <div
+              dangerouslySetInnerHTML={{
+                __html: getVehicleIconSvg(vehicleType),
+              }}
+            />
+          </div>
+          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-emerald-400" />
+        </div>
+      </div>
+    );
+  }
 
   return null;
 }

@@ -16,6 +16,9 @@ import {
   SearchRadarOverlay,
   DensityHeatmap,
   useMap,
+  isWebGLSupported,
+  DHAKA_2D_BOUNDS,
+  DHAKA_2D_LANDMARKS,
 } from '../../src/components/map';
 
 describe('Map GeoJSON Utilities', () => {
@@ -108,5 +111,26 @@ describe('Map Component Exports & SSR Safety', () => {
     expect(typeof DensityHeatmap).toBe('function');
     expect(typeof useMap).toBe('function');
   });
-});
 
+  it('isWebGLSupported executes safely and returns boolean in Node/SSR environment', () => {
+    const supported = isWebGLSupported();
+    expect(typeof supported).toBe('boolean');
+    expect(supported).toBe(false); // In Node/test environment without window/canvas WebGL
+  });
+
+  it('provides Dhaka 2D boundary configuration and landmarks for fallback mode', () => {
+    expect(DHAKA_2D_BOUNDS.minLat).toBeLessThan(DHAKA_2D_BOUNDS.maxLat);
+    expect(DHAKA_2D_BOUNDS.minLng).toBeLessThan(DHAKA_2D_BOUNDS.maxLng);
+
+    expect(Array.isArray(DHAKA_2D_LANDMARKS)).toBe(true);
+    expect(DHAKA_2D_LANDMARKS.length).toBeGreaterThanOrEqual(7);
+
+    // Verify all landmarks are within Dhaka boundaries
+    for (const lm of DHAKA_2D_LANDMARKS) {
+      expect(lm.lat).toBeGreaterThanOrEqual(DHAKA_2D_BOUNDS.minLat);
+      expect(lm.lat).toBeLessThanOrEqual(DHAKA_2D_BOUNDS.maxLat);
+      expect(lm.lng).toBeGreaterThanOrEqual(DHAKA_2D_BOUNDS.minLng);
+      expect(lm.lng).toBeLessThanOrEqual(DHAKA_2D_BOUNDS.maxLng);
+    }
+  });
+});

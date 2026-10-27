@@ -28,7 +28,7 @@ export function SearchRadarOverlay({
   const map = propMap ?? context.map;
   const markerRef = useRef<maplibregl.Marker | null>(null);
 
-  // If center and map are provided, anchor animated radar marker at pickup point
+  // If center and WebGL map are provided, anchor animated radar marker at pickup point
   useEffect(() => {
     if (!active || !center || !map) {
       if (markerRef.current) {
@@ -45,7 +45,8 @@ export function SearchRadarOverlay({
     const [lon, latitude] = toLngLat(lat, lng);
 
     const el = document.createElement('div');
-    el.className = 'radar-marker-anchor pointer-events-none relative flex items-center justify-center';
+    el.className =
+      'radar-marker-anchor pointer-events-none relative flex items-center justify-center';
     el.innerHTML = `
       <div class="relative w-36 h-36 flex items-center justify-center">
         <!-- Concentric ripple rings -->
@@ -113,11 +114,30 @@ export function SearchRadarOverlay({
         </div>
       )}
 
+      {/* 2D Mode radar rings anchored at pickup coordinate */}
+      {!map && context.project && center && (() => {
+        const pt = context.project(center);
+        if (!pt) return null;
+        return (
+          <div
+            className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 z-10"
+            style={{ left: `${pt.x}%`, top: `${pt.y}%` }}
+          >
+            <div className="relative w-36 h-36 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border border-emerald-500/60 bg-emerald-500/10 radar-ring-1" />
+              <div className="absolute inset-0 rounded-full border border-emerald-500/40 bg-emerald-500/5 radar-ring-2" />
+              <div className="absolute inset-0 rounded-full border border-emerald-400/20 bg-emerald-400/5 radar-ring-3" />
+              <div className="w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-lg z-10" />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Searching HUD notification card */}
       <div
         className={`absolute bottom-6 inset-x-4 z-20 max-w-sm mx-auto ${className}`}
       >
-        <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-4 shadow-2xl backdrop-blur-md">
+        <div className="bg-neutral-900/95 border border-neutral-800 rounded-2xl p-4 shadow-2xl backdrop-blur-md">
           <div className="flex items-center gap-3">
             {/* Spinning radar indicator */}
             <div className="relative w-8 h-8 flex-shrink-0 flex items-center justify-center">
@@ -129,16 +149,16 @@ export function SearchRadarOverlay({
               <h4 className="text-sm font-semibold text-white tracking-tight truncate">
                 {title}
               </h4>
-              <p className="text-xs text-slate-400 truncate">{subtext}</p>
+              <p className="text-xs text-neutral-400 truncate">{subtext}</p>
             </div>
           </div>
 
           {onCancel && (
-            <div className="mt-3 pt-3 border-t border-slate-800">
+            <div className="mt-3 pt-3 border-t border-neutral-800">
               <button
                 type="button"
                 onClick={onCancel}
-                className="w-full py-2 px-3 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:bg-slate-600 rounded-lg transition-colors border border-slate-700"
+                className="w-full py-2 px-3 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 rounded-lg transition-colors border border-neutral-700"
               >
                 Cancel Search
               </button>

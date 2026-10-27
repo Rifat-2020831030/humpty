@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import { HeatmapCell } from '../../types';
 import { useMap } from './MapBase';
@@ -21,7 +21,6 @@ export function DensityHeatmap({
 }: DensityHeatmapProps) {
   const context = useMap();
   const map = propMap ?? context.map;
-  const isLoaded = context.isLoaded || (map ? map.isStyleLoaded() : false);
 
   const sourceId = `source-${id}`;
   const layerId = `layer-${id}`;
@@ -54,37 +53,54 @@ export function DensityHeatmap({
           source: sourceId,
           maxzoom: 16,
           paint: {
-            // Increase heatmap weight based on property intensity (1-10)
+            // Increase the heatmap weight based on frequency and property magnitude
             'heatmap-weight': [
               'interpolate',
               ['linear'],
               ['get', 'intensity'],
-              0, 0,
-              1, 0.2,
-              5, 0.7,
-              10, 1,
+              0,
+              0,
+              10,
+              1,
             ],
-            // Color ramp: transparent -> green (emerald-500) -> yellow (yellow-500) -> orange -> red (red-500)
+            // Increase the heatmap color weight weight by zoom level
+            // heatmap-intensity is a multiplier on top of heatmap-weight
+            'heatmap-intensity': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              11,
+              1,
+              15,
+              3,
+            ],
+            // Color ramp for heatmap: transparent -> subtle teal -> rich emerald -> bright green
             'heatmap-color': [
               'interpolate',
               ['linear'],
               ['heatmap-density'],
-              0, 'rgba(0, 0, 0, 0)',
-              0.2, 'rgba(34, 197, 94, 0.5)',   // green
-              0.5, 'rgba(234, 179, 8, 0.8)',   // yellow
-              0.8, 'rgba(249, 115, 22, 0.9)',  // orange
-              1.0, 'rgba(239, 68, 68, 0.95)',  // red
+              0,
+              'rgba(0, 106, 78, 0)',
+              0.2,
+              'rgba(4, 120, 87, 0.35)',
+              0.4,
+              'rgba(16, 185, 129, 0.6)',
+              0.7,
+              'rgba(52, 211, 153, 0.85)',
+              1,
+              'rgba(110, 231, 183, 1)',
             ],
-            // Heatmap radius adjusts by zoom level for smooth visibility across scales
+            // Adjust the heatmap radius by zoom level
             'heatmap-radius': [
               'interpolate',
               ['linear'],
               ['zoom'],
-              0, 2,
-              9, 18,
-              13, 35,
-              16, 60,
+              11,
+              18,
+              15,
+              38,
             ],
+            // Transition from heatmap to circle layer by zoom level
             'heatmap-opacity': opacity,
           },
         });
@@ -112,7 +128,7 @@ export function DensityHeatmap({
     };
   }, [map, sourceId, layerId]);
 
-  // Update source data when cells change
+  // Update source data when cells change in WebGL mode
   useEffect(() => {
     if (!map || !layerAddedRef.current) return;
     const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
@@ -128,6 +144,39 @@ export function DensityHeatmap({
       map.setPaintProperty(layerId, 'heatmap-opacity', opacity);
     }
   }, [opacity, map, layerId]);
+
+  // Fallback 2D heatmap blobs when WebGL is unavailable
+  if (!map && context.project && cells.length > 0) {
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none overflow-hidden z-10"
+        style={{ opacity }}
+      >
+        {cells.map((c, i) => {
+          const pt = context.project!({ lat: c.lat, lng: c.lng });
+          if (!pt) return null;
+          const radius = Math.min(
+            32,
+            Math.max(14, ('intensity' in c ? c.intensity : 1) * 6)
+          );
+          return (
+            <div
+              key={i}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full blur-md"
+              style={{
+                left: `${pt.x}%`,
+                top: `${pt.y}%`,
+                width: `${radius * 2}px`,
+                height: `${radius * 2}px`,
+                background:
+                  'radial-gradient(circle, rgba(16,185,129,0.7) 0%, rgba(5,150,105,0.3) 60%, transparent 100%)',
+              }}
+            />
+          );
+        })}
+      </div>
+    );
+  }
 
   return null;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import { useMap } from './MapBase';
 import { buildGeoJsonLine } from './mapUtils';
@@ -24,7 +24,6 @@ export function RouteLayer({
 }: RouteLayerProps) {
   const context = useMap();
   const map = propMap ?? context.map;
-  const isLoaded = context.isLoaded || (map ? map.isStyleLoaded() : false);
 
   const sourceId = `source-${id}`;
   const layerCasingId = `layer-${id}-casing`;
@@ -51,7 +50,7 @@ export function RouteLayer({
         source.setData(geojsonData);
       }
 
-      // Add high-contrast casing (dark emerald/slate border under the line)
+      // Add high-contrast casing (dark emerald/neutral border under the line)
       if (!map.getLayer(layerCasingId)) {
         map.addLayer({
           id: layerCasingId,
@@ -110,9 +109,9 @@ export function RouteLayer({
       }
       layerAddedRef.current = false;
     };
-  }, [map, sourceId, layerId, layerCasingId]);
+  }, [coordinates, color, width, opacity, map, sourceId, layerId, layerCasingId]);
 
-  // Update line data when coordinates change
+  // Update source data when coordinates change
   useEffect(() => {
     if (!map || !layerAddedRef.current) return;
     const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
@@ -121,7 +120,7 @@ export function RouteLayer({
     }
   }, [coordinates, map, sourceId]);
 
-  // Update line paint properties if color/width/opacity change
+  // Update paint styles when props change
   useEffect(() => {
     if (!map || !layerAddedRef.current) return;
     if (map.getLayer(layerId)) {
@@ -134,6 +133,42 @@ export function RouteLayer({
       map.setPaintProperty(layerCasingId, 'line-opacity', opacity);
     }
   }, [color, width, opacity, map, layerId, layerCasingId]);
+
+  // Fallback 2D SVG route when WebGL is unavailable
+  if (!map && context.project && coordinates.length >= 2) {
+    const points = coordinates
+      .map((c) => {
+        const pt = context.project!([c[0], c[1]]);
+        return pt ? `${pt.x},${pt.y}` : null;
+      })
+      .filter(Boolean)
+      .join(' ');
+
+    return (
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none z-10"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <polyline
+          points={points}
+          fill="none"
+          stroke="#064e3b"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
 
   return null;
 }
