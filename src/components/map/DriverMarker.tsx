@@ -18,20 +18,22 @@ export interface DriverMarkerProps {
 function getVehicleIconSvg(type: VehicleType = 'BIKE'): string {
   switch (type) {
     case 'CNG':
-      // Auto-rickshaw (green 3-wheeler) SVG icon
+      // Lucide CarTaxiFront icon (proper standard icon)
       return `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="5.5" cy="17.5" r="2.5"/>
-          <circle cx="17.5" cy="17.5" r="2.5"/>
-          <path d="M8 17h7"/>
-          <path d="M3 15h2l2-7h8l2 5h2"/>
-          <path d="M7 10h6"/>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 2h4"/>
+          <path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.6 5H8.4a2 2 0 0 0-1.9 1.3L5 10 3 8"/>
+          <path d="M7 14h.01"/>
+          <path d="M17 14h.01"/>
+          <rect width="18" height="8" x="3" y="10" rx="2"/>
+          <path d="M5 18v2"/>
+          <path d="M19 18v2"/>
         </svg>
       `;
     case 'CAR':
-      // Sedan car SVG icon
+      // Lucide Car icon (proper standard icon)
       return `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C2.1 11.1 2 11.5 2 12v4c0 .6.4 1 1 1h2"/>
           <circle cx="7" cy="17" r="2"/>
           <circle cx="17" cy="17" r="2"/>
@@ -39,13 +41,13 @@ function getVehicleIconSvg(type: VehicleType = 'BIKE'): string {
       `;
     case 'BIKE':
     default:
-      // Motorcycle SVG icon
+      // Lucide Bike icon (proper standard icon)
       return `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="5" cy="16" r="3"/>
-          <circle cx="19" cy="16" r="3"/>
-          <path d="M12 16h-4l3-8 3 5 4-2"/>
-          <path d="m14 11 2-5h3"/>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18.5" cy="17.5" r="3.5"/>
+          <circle cx="5.5" cy="17.5" r="3.5"/>
+          <circle cx="15" cy="5" r="1"/>
+          <path d="M12 17.5V14l-3-3 4-3 2 3h2"/>
         </svg>
       `;
   }
@@ -84,15 +86,15 @@ export function DriverMarker({
     el.id = id;
     el.className = 'driver-marker-container cursor-pointer select-none';
 
-    // Utilitarian high-contrast vehicle badge with bearing indicator arrow
+    // Black & white high-contrast vehicle badge with directional pointer
     el.innerHTML = `
       <div class="relative flex items-center justify-center">
-        <!-- Directional arrow pointer -->
+        <!-- Directional pointer -->
         <div class="driver-marker-rotator transition-transform duration-300 ease-out" style="transform: rotate(${bearing}deg);">
-          <div class="w-10 h-10 rounded-full bg-neutral-900 border-2 border-emerald-400 shadow-xl flex items-center justify-center text-emerald-400">
+          <div class="w-10 h-10 rounded-full bg-black border-2 border-white shadow-2xl flex items-center justify-center text-white">
             ${getVehicleIconSvg(vehicleType)}
           </div>
-          <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-emerald-400"></div>
+          <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-white"></div>
         </div>
       </div>
     `;
@@ -206,14 +208,14 @@ export function DriverMarker({
           className="transition-transform duration-300 ease-out"
           style={{ transform: `rotate(${bearing}deg)` }}
         >
-          <div className="w-9 h-9 rounded-full bg-neutral-900 border-2 border-emerald-400 shadow-xl flex items-center justify-center text-emerald-400">
+          <div className="w-9 h-9 rounded-full bg-black border-2 border-white shadow-2xl flex items-center justify-center text-white">
             <div
               dangerouslySetInnerHTML={{
                 __html: getVehicleIconSvg(vehicleType),
               }}
             />
           </div>
-          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-emerald-400" />
+          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-white" />
         </div>
       </div>
     );

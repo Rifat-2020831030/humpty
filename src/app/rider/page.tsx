@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { MapPin } from 'lucide-react';
 import { trpc } from '../../trpc/client';
 import { useSession } from '../../hooks/useSession';
 import { useLocation } from '../../hooks/useLocation';
@@ -14,6 +15,7 @@ import {
   FareSelector,
   SearchingOverlay,
   DriverCard,
+  DriverArrivedScreen,
   TripActiveHUD,
   TripCompleted,
   RatingScreen,
@@ -89,6 +91,10 @@ function RiderContent() {
     ['DRIVER_ASSIGNED', 'DRIVER_EN_ROUTE', 'ARRIVED_AT_PICKUP'].includes(rideStatus)
   );
   const [driverCoord, setDriverCoord] = useState<{ lat: number; lng: number; bearing?: number } | null>(null);
+  const [approachProgress, setApproachProgress] = useState<number>(0);
+  const [tripProgress, setTripProgress] = useState<number>(0);
+  const approachStartRef = useRef<{ lat: number; lng: number } | null>(null);
+  const [isStartingTrip, setIsStartingTrip] = useState<boolean>(false);
 
   // Chat Drawer State
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
@@ -119,6 +125,31 @@ function RiderContent() {
     { rideId: activeRideId || '' },
     { enabled: Boolean(activeRideId && isChatOpen), refetchInterval: isChatOpen ? 2000 : false }
   );
+
+  // AI Location Options Query (returns multiple Dhaka options to choose from)
+  const aiOptionsQuery = trpc.location.aiSearchOptions.useQuery(
+    {
+      query: dropoffText || '',
+      contextLat: pickupCoord?.lat,
+      contextLng: pickupCoord?.lng,
+    },
+    {
+      enabled: currentStep === 'LOCATION_SEARCH' || currentStep === 'HOME',
+    }
+  );
+
+  const locationSuggestions = useMemo(() => {
+    if (aiOptionsQuery.data && aiOptionsQuery.data.length > 0) {
+      return aiOptionsQuery.data;
+    }
+    return [
+      { displayName: 'Gulshan 2 Circle, Dhaka', lat: 23.7938, lng: 90.4143, category: 'Commercial' },
+      { displayName: 'Banani Road 11, Dhaka', lat: 23.7901, lng: 90.4062, category: 'Food & Shopping' },
+      { displayName: 'Dhanmondi 27 (Road 27), Dhaka', lat: 23.7461, lng: 90.3742, category: 'Residential' },
+      { displayName: 'Jamuna Future Park, Kuril, Dhaka', lat: 23.8135, lng: 90.4242, category: 'Shopping Mall' },
+      { displayName: 'Hazrat Shahjalal International Airport', lat: 23.8433, lng: 90.4029, category: 'Transit' },
+    ];
+  }, [aiOptionsQuery.data]);
 
   // Ensure role is RIDER
   useEffect(() => {
@@ -200,73 +231,117 @@ function RiderContent() {
     }
   }, [driverLocQuery.data]);
 
-  // Local simulated driver movement along route for smooth demo
+  // Reset progress when search starts or clears
+  useEffect(() => {
+    if (rideStatus === 'SEARCHING' || !rideStatus) {
+      setApproachProgress(0);
+      setTripProgress(0);
+      approachStartRef.current = null;
+    }
+  }, [rideStatus]);
+
+  // Handle Starting Ride upon confirmation
+  const handleStartRide = async () => {
+    if (!activeRideId) return;
+    setIsStartingTrip(true);
+    try {
+      await startTripMutation.mutateAsync({ rideId: activeRideId });
+    } catch (err) {
+      console.error('Failed to start trip via API (proceeding with local simulation):', err);
+    } finally {
+      setRideStatus('IN_PROGRESS');
+      setTripProgress(0);
+      setIsStartingTrip(false);
+      if (pickupCoord && dropoffCoord) {
+        setDriverCoord({
+          lat: pickupCoord.lat,
+          lng: pickupCoord.lng,
+          bearing: calculateBearing(pickupCoord.lat, pickupCoord.lng, dropoffCoord.lat, dropoffCoord.lng),
+        });
+      }
+    }
+  };
+
+  // Local simulated driver movement in straight line (approaching pickup & going to destination)
   useEffect(() => {
     if (!activeRideId || !pickupCoord) return;
 
-    // Phase 1: Driver approaching pickup
+    // Phase 1: Driver approaching pickup along a straight line
     if (rideStatus === 'DRIVER_ASSIGNED' || rideStatus === 'DRIVER_EN_ROUTE') {
+      if (!approachStartRef.current) {
+        approachStartRef.current = {
+          lat: pickupCoord.lat + 0.007,
+          lng: pickupCoord.lng + 0.005,
+        };
+      }
+      const start = approachStartRef.current;
+      const bearing = calculateBearing(start.lat, start.lng, pickupCoord.lat, pickupCoord.lng);
+
       if (!driverCoord) {
         setDriverCoord({
-          lat: pickupCoord.lat + 0.005,
-          lng: pickupCoord.lng + 0.004,
-          bearing: calculateBearing(
-            pickupCoord.lat + 0.005,
-            pickupCoord.lng + 0.004,
-            pickupCoord.lat,
-            pickupCoord.lng
-          ),
+          lat: start.lat,
+          lng: start.lng,
+          bearing,
         });
-        return;
       }
 
       const timer = setInterval(() => {
-        setDriverCoord((prev) => {
-          if (!prev) return prev;
-          const distKm = calculateDistance(prev.lat, prev.lng, pickupCoord.lat, pickupCoord.lng);
-          if (distKm <= 0.035) {
+        setApproachProgress((prev) => {
+          const next = Math.min(1, prev + 0.08);
+          const nextLat = start.lat + (pickupCoord.lat - start.lat) * next;
+          const nextLng = start.lng + (pickupCoord.lng - start.lng) * next;
+          setDriverCoord({ lat: nextLat, lng: nextLng, bearing });
+
+          if (next >= 1) {
+            clearInterval(timer);
             setRideStatus('ARRIVED_AT_PICKUP');
             arrivedMutation.mutate({ rideId: activeRideId });
-            return { lat: pickupCoord.lat, lng: pickupCoord.lng, bearing: prev.bearing };
+            setDriverCoord({ lat: pickupCoord.lat, lng: pickupCoord.lng, bearing });
           }
-          const step = 0.16;
-          const nextLat = prev.lat + (pickupCoord.lat - prev.lat) * step;
-          const nextLng = prev.lng + (pickupCoord.lng - prev.lng) * step;
-          const bearing = calculateBearing(prev.lat, prev.lng, pickupCoord.lat, pickupCoord.lng);
-          return { lat: nextLat, lng: nextLng, bearing };
+          return next;
         });
-      }, 1000);
+      }, 750);
 
       return () => clearInterval(timer);
     }
 
-    // Phase 2: Driver arrived at pickup -> automatically start trip after 3.5s in demo
+    // Phase 2: Driver arrived at pickup -> Keeps station and WAITS for confirmation (no auto-start!)
     if (rideStatus === 'ARRIVED_AT_PICKUP') {
-      const startTimer = setTimeout(() => {
-        setRideStatus('IN_PROGRESS');
-        startTripMutation.mutate({ rideId: activeRideId });
-      }, 3500);
-      return () => clearTimeout(startTimer);
+      if (pickupCoord) {
+        setDriverCoord((prev) => ({
+          lat: pickupCoord.lat,
+          lng: pickupCoord.lng,
+          bearing: prev?.bearing || 0,
+        }));
+      }
+      return;
     }
 
-    // Phase 3: Trip in progress towards dropoff
+    // Phase 3: Trip in progress towards destination along a straight line
     if (rideStatus === 'IN_PROGRESS' && dropoffCoord) {
+      const bearing = calculateBearing(
+        pickupCoord.lat,
+        pickupCoord.lng,
+        dropoffCoord.lat,
+        dropoffCoord.lng
+      );
+
       const timer = setInterval(() => {
-        setDriverCoord((prev) => {
-          if (!prev) return prev;
-          const distKm = calculateDistance(prev.lat, prev.lng, dropoffCoord.lat, dropoffCoord.lng);
-          if (distKm <= 0.035) {
+        setTripProgress((prev) => {
+          const next = Math.min(1, prev + 0.05);
+          const nextLat = pickupCoord.lat + (dropoffCoord.lat - pickupCoord.lat) * next;
+          const nextLng = pickupCoord.lng + (dropoffCoord.lng - pickupCoord.lng) * next;
+          setDriverCoord({ lat: nextLat, lng: nextLng, bearing });
+
+          if (next >= 1) {
+            clearInterval(timer);
             setRideStatus('COMPLETED');
             completeTripMutation.mutate({ rideId: activeRideId });
-            return { lat: dropoffCoord.lat, lng: dropoffCoord.lng, bearing: prev.bearing };
+            setDriverCoord({ lat: dropoffCoord.lat, lng: dropoffCoord.lng, bearing });
           }
-          const step = 0.14;
-          const nextLat = prev.lat + (dropoffCoord.lat - prev.lat) * step;
-          const nextLng = prev.lng + (dropoffCoord.lng - prev.lng) * step;
-          const bearing = calculateBearing(prev.lat, prev.lng, dropoffCoord.lat, dropoffCoord.lng);
-          return { lat: nextLat, lng: nextLng, bearing };
+          return next;
         });
-      }, 1000);
+      }, 750);
 
       return () => clearInterval(timer);
     }
@@ -277,7 +352,6 @@ function RiderContent() {
     dropoffCoord,
     driverCoord,
     arrivedMutation,
-    startTripMutation,
     completeTripMutation,
   ]);
 
@@ -317,8 +391,9 @@ function RiderContent() {
   }, [selectedVehicle, routeDistanceKm]);
 
   // Handle Location Search Submission
-  const handleSubmitLocationSearch = async () => {
-    if (!dropoffText.trim()) return;
+  const handleSubmitLocationSearch = async (overrideQuery?: string) => {
+    const textToSearch = (overrideQuery ?? dropoffText).trim();
+    if (!textToSearch) return;
     setIsSearchingLocation(true);
 
     try {
@@ -326,7 +401,7 @@ function RiderContent() {
 
       if (aiMode) {
         const aiResult = await aiSearchMutation.mutateAsync({
-          query: dropoffText,
+          query: textToSearch,
           contextLat: pickupCoord.lat,
           contextLng: pickupCoord.lng,
         });
@@ -337,7 +412,7 @@ function RiderContent() {
           }
         }
       } else {
-        const queryLower = dropoffText.toLowerCase();
+        const queryLower = textToSearch.toLowerCase();
         if (queryLower.includes('gulshan')) {
           matchedCoord = { lat: 23.7925, lng: 90.4078 };
         } else if (queryLower.includes('banani')) {
@@ -483,11 +558,100 @@ function RiderContent() {
     }
   };
 
+  const isHomeView =
+    currentStep === 'HOME' &&
+    !isTripActive &&
+    rideStatus !== 'SEARCHING' &&
+    rideStatus !== 'IN_PROGRESS' &&
+    rideStatus !== 'COMPLETED';
+
+  const isLocationSearchView =
+    currentStep === 'LOCATION_SEARCH' &&
+    !isTripActive &&
+    rideStatus !== 'SEARCHING' &&
+    rideStatus !== 'IN_PROGRESS' &&
+    rideStatus !== 'COMPLETED';
+
   return (
     <main className="relative w-full h-screen overflow-hidden bg-black text-white flex flex-col font-sans select-none">
-      {/* Central Interactive Map Area */}
-      <div className="absolute inset-0 z-0">
-        <MapBase
+      {isHomeView ? (
+        /* Full-page Pathao-style Home Screen with NO MAP */
+        <HomeScreen
+          selectedVehicle={selectedVehicle}
+          onSelectVehicle={(vehicle) => {
+            setSelectedVehicle(vehicle);
+            setCurrentStep('LOCATION_SEARCH');
+          }}
+          onOpenSearch={() => setCurrentStep('LOCATION_SEARCH')}
+          onApplyPromo={handleApplyPromo}
+          userLocationName={pickupText}
+          aiMode={aiMode}
+          onToggleAi={() => setAiMode(!aiMode)}
+          onSearchSubmit={(query) => {
+            setDropoffText(query);
+            setCurrentStep('LOCATION_SEARCH');
+          }}
+        />
+      ) : isLocationSearchView ? (
+        /* Blank screen with 2 search options on top, AI return options list, and confirm button on bottom (NO MAP) */
+        <LocationSearch
+          pickupText={pickupText}
+          dropoffText={dropoffText}
+          onPickupChange={setPickupText}
+          onDropoffChange={setDropoffText}
+          onUseGPS={requestGPS}
+          onSelectManually={() => handleOpenManualPinPicker('pickup')}
+          onSelectDropoffManually={() => handleOpenManualPinPicker('dropoff')}
+          aiMode={aiMode}
+          onToggleAI={() => setAiMode(!aiMode)}
+          suggestions={locationSuggestions}
+          isLoading={aiOptionsQuery.isFetching || aiSearchMutation.isPending}
+          onSubmitSearch={() => {
+            if (dropoffText) {
+              aiOptionsQuery.refetch();
+            }
+          }}
+          onSelectSuggestion={(item) => {
+            setDropoffText(item.displayName || item.name);
+            setDropoffCoord({ lat: item.lat, lng: item.lng });
+          }}
+          onConfirm={() => {
+            if (!dropoffCoord) {
+              const defaultTarget = locationSuggestions[0] || {
+                lat: 23.7938,
+                lng: 90.4143,
+                displayName: 'Gulshan 2 Circle, Dhaka',
+              };
+              setDropoffCoord({ lat: defaultTarget.lat, lng: defaultTarget.lng });
+              setDropoffText(defaultTarget.displayName);
+            }
+            setCurrentStep('FARE_SELECT');
+          }}
+          onBack={() => setCurrentStep('HOME')}
+          selectedVehicle={selectedVehicle}
+          error={locationError}
+          onClearError={clearLocationError}
+        />
+      ) : (
+        /* Map View: FARE_SELECT, ACTIVE TRIP, MANUAL PIN PICKER */
+        <div className="relative w-full h-full flex flex-col overflow-hidden">
+          {/* Top Back-to-Locations Button when in FARE_SELECT */}
+          {currentStep === 'FARE_SELECT' && (
+            <div className="absolute top-3 left-3 z-30 pointer-events-auto">
+              <button
+                type="button"
+                onClick={() => setCurrentStep('LOCATION_SEARCH')}
+                className="px-3 py-1.5 bg-neutral-950/90 hover:bg-neutral-900 border border-neutral-800 rounded-xl text-xs font-semibold text-neutral-200 shadow-xl backdrop-blur-md flex items-center gap-1.5 transition-all"
+              >
+                <span>←</span>
+                <span>Locations</span>
+              </button>
+            </div>
+          )}
+
+          {/* Central Interactive Map Area */}
+          <div className="absolute inset-0 z-0">
+            <MapBase
           center={
             currentStep === 'MANUAL_PIN_PICKER'
               ? [centerPinCoord.lat, centerPinCoord.lng]
@@ -533,24 +697,43 @@ function RiderContent() {
                 />
               )}
 
-              {/* Route Layer when both pickup and dropoff exist */}
+              {/* Straight route line from driver to pickup while arriving */}
+              {driverCoord &&
+                (rideStatus === 'DRIVER_ASSIGNED' || rideStatus === 'DRIVER_EN_ROUTE') && (
+                  <RouteLayer
+                    id="driver-approach-straight-line"
+                    coordinates={[
+                      [driverCoord.lat, driverCoord.lng],
+                      [pickupCoord.lat, pickupCoord.lng],
+                    ]}
+                    color="#10b981"
+                    width={5}
+                  />
+                )}
+
+              {/* Straight route line to destination during active trip, arrival, or fare selector */}
               {dropoffCoord && (
                 <RouteLayer
-                  coordinates={[
-                    [pickupCoord.lat, pickupCoord.lng],
-                    [
-                      (pickupCoord.lat + dropoffCoord.lat) / 2 + 0.003,
-                      (pickupCoord.lng + dropoffCoord.lng) / 2 + 0.002,
-                    ],
-                    [dropoffCoord.lat, dropoffCoord.lng],
-                  ]}
-                  color="#006a4e"
+                  id="destination-straight-line"
+                  coordinates={
+                    rideStatus === 'IN_PROGRESS' && driverCoord
+                      ? [
+                          [driverCoord.lat, driverCoord.lng],
+                          [dropoffCoord.lat, dropoffCoord.lng],
+                        ]
+                      : [
+                          [pickupCoord.lat, pickupCoord.lng],
+                          [dropoffCoord.lat, dropoffCoord.lng],
+                        ]
+                  }
+                  color={rideStatus === 'IN_PROGRESS' ? '#10b981' : '#006a4e'}
                   width={5}
                 />
               )}
 
-              {/* Driver Marker during active ride or seed drivers on Home */}
-              {(isTripActive || rideStatus === 'IN_PROGRESS') && driverCoord ? (
+              {/* Driver Marker during active ride, arrival, or trip in progress */}
+              {(isTripActive || rideStatus === 'IN_PROGRESS' || rideStatus === 'ARRIVED_AT_PICKUP') &&
+              driverCoord ? (
                 <DriverMarker
                   position={[driverCoord.lat, driverCoord.lng]}
                   bearing={driverCoord.bearing || 0}
@@ -576,11 +759,21 @@ function RiderContent() {
         <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-full pointer-events-none z-30 flex flex-col items-center">
           {/* Badge Tooltip */}
           <div
-            className={`px-3 py-1 mb-1.5 bg-neutral-950/95 border border-emerald-500 rounded-full text-xs font-semibold text-emerald-400 shadow-2xl backdrop-blur-md transition-all duration-200 ${
+            className={`px-3 py-1 mb-1.5 bg-black border border-white/80 rounded-full text-xs font-semibold text-white shadow-2xl backdrop-blur-md transition-all duration-200 ${
               isMapMoving ? '-translate-y-2 scale-105' : 'translate-y-0 scale-100'
             }`}
           >
-            {pinPickerTarget === 'pickup' ? '📍 Set Pickup Point' : '🎯 Set Destination'}
+            {pinPickerTarget === 'pickup' ? (
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-white" />
+                <span>Set Pickup Point</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-white" />
+                <span>Set Destination</span>
+              </span>
+            )}
           </div>
 
           {/* Elevated Pin Icon with smooth lift animation on map move */}
@@ -589,28 +782,15 @@ function RiderContent() {
               isMapMoving ? '-translate-y-3 scale-110' : 'translate-y-0 scale-100'
             }`}
           >
-            <div className="w-10 h-10 rounded-full bg-emerald-600 border-2 border-white shadow-2xl flex items-center justify-center text-white">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
+            <div className="w-10 h-10 rounded-full bg-black border-2 border-white shadow-2xl flex items-center justify-center text-white">
+              <MapPin className="w-5 h-5 text-white" />
             </div>
-            <div className="w-2.5 h-2.5 -mt-1 mx-auto rotate-45 bg-emerald-600 border-r-2 border-b-2 border-white" />
+            <div className="w-2.5 h-2.5 -mt-1 mx-auto rotate-45 bg-black border-r-2 border-b-2 border-white" />
           </div>
 
           {/* Ground Shadow */}
           <div
-            className={`w-4 h-1.5 rounded-full bg-black/50 blur-[1px] transition-all duration-200 ${
+            className={`w-4 h-1.5 rounded-full bg-black/60 blur-[1px] transition-all duration-200 ${
               isMapMoving ? 'scale-75 opacity-30 mt-3' : 'scale-100 opacity-70 mt-1'
             }`}
           />
@@ -703,12 +883,30 @@ function RiderContent() {
               driverName={matchedDriver.name}
               vehiclePlate={matchedDriver.plate}
               currentFare={Math.max(0, fareBreakdown.totalFare - promoDiscount)}
-              distanceTraveledKm={Math.min(routeDistanceKm, 2.4)}
+              distanceTraveledKm={Number(
+                Math.min(routeDistanceKm, Math.max(0.1, routeDistanceKm * tripProgress)).toFixed(1)
+              )}
               totalDistanceKm={routeDistanceKm}
               onSOS={() => {
                 if (typeof window !== 'undefined') window.location.href = 'tel:999';
               }}
               onOpenChat={() => setIsChatOpen(true)}
+            />
+          </div>
+        ) : rideStatus === 'ARRIVED_AT_PICKUP' ? (
+          /* Step: DRIVER ARRIVED CONFIRMATION SCREEN */
+          <div className="mt-auto pointer-events-auto">
+            <DriverArrivedScreen
+              driverName={matchedDriver.name}
+              driverPlate={matchedDriver.plate}
+              driverVehicle={matchedDriver.vehicle}
+              driverRating={matchedDriver.rating}
+              driverPhone={matchedDriver.phone}
+              pickupAddress={pickupText}
+              onConfirmStartRide={handleStartRide}
+              onDriverConfirmStartRide={handleStartRide}
+              onOpenChat={() => setIsChatOpen(true)}
+              isLoading={isStartingTrip || startTripMutation.isPending}
             />
           </div>
         ) : isTripActive ? (
@@ -719,12 +917,8 @@ function RiderContent() {
               driverPlate={matchedDriver.plate}
               driverVehicle={matchedDriver.vehicle}
               driverRating={matchedDriver.rating}
-              etaMinutes={rideStatus === 'ARRIVED_AT_PICKUP' ? 0 : 4}
-              statusText={
-                rideStatus === 'ARRIVED_AT_PICKUP'
-                  ? 'Driver has arrived at pickup!'
-                  : 'Driver is on the way'
-              }
+              etaMinutes={Math.max(1, Math.round((1 - approachProgress) * 4))}
+              statusText="Driver is on the way to pickup"
               onOpenChat={() => setIsChatOpen(true)}
             />
           </div>
@@ -747,7 +941,7 @@ function RiderContent() {
                 onClick={() => setCurrentStep('LOCATION_SEARCH')}
                 className="px-3 py-1.5 bg-neutral-900/90 border border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white"
               >
-                ← Back to Search
+                ← Back to Locations
               </button>
             </div>
             <FareSelector
@@ -761,47 +955,10 @@ function RiderContent() {
               isLoading={requestMutation.isPending || isConfirmingRide}
             />
           </div>
-        ) : currentStep === 'LOCATION_SEARCH' ? (
-          /* Step: LOCATION SEARCH MODAL */
-          <div className="mt-auto mb-4 pointer-events-auto">
-            <div className="mb-2 flex justify-start">
-              <button
-                type="button"
-                onClick={() => setCurrentStep('HOME')}
-                className="px-3 py-1.5 bg-neutral-900/90 border border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white"
-              >
-                ← Back to Map
-              </button>
-            </div>
-            <LocationSearch
-              pickupText={pickupText}
-              dropoffText={dropoffText}
-              onPickupChange={setPickupText}
-              onDropoffChange={setDropoffText}
-              onUseGPS={requestGPS}
-              onSelectManually={() => handleOpenManualPinPicker('pickup')}
-              onSelectDropoffManually={() => handleOpenManualPinPicker('dropoff')}
-              aiMode={aiMode}
-              onToggleAI={() => setAiMode(!aiMode)}
-              onSubmitSearch={handleSubmitLocationSearch}
-              isLoading={isSearchingLocation}
-              error={locationError}
-              onClearError={clearLocationError}
-            />
+        ) : null}
           </div>
-        ) : (
-          /* Step: HOME SCREEN */
-          <div className="h-full w-full pointer-events-none flex flex-col justify-between">
-            <HomeScreen
-              selectedVehicle={selectedVehicle}
-              onSelectVehicle={setSelectedVehicle}
-              onOpenSearch={() => setCurrentStep('LOCATION_SEARCH')}
-              onApplyPromo={handleApplyPromo}
-              userLocationName={pickupText}
-            />
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* In-Trip Chat Drawer Modal */}
       {isChatOpen && activeRideId && (

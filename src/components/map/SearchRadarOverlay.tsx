@@ -49,12 +49,12 @@ export function SearchRadarOverlay({
       'radar-marker-anchor pointer-events-none relative flex items-center justify-center';
     el.innerHTML = `
       <div class="relative w-36 h-36 flex items-center justify-center">
-        <!-- Concentric ripple rings -->
-        <div class="absolute inset-0 rounded-full border border-emerald-500/60 bg-emerald-500/10 radar-ring-1"></div>
-        <div class="absolute inset-0 rounded-full border border-emerald-500/40 bg-emerald-500/5 radar-ring-2"></div>
-        <div class="absolute inset-0 rounded-full border border-emerald-400/20 bg-emerald-400/5 radar-ring-3"></div>
+        <!-- Concentric ripple rings (Black & White) -->
+        <div class="absolute inset-0 rounded-full border border-white/60 bg-white/10 radar-ring-1"></div>
+        <div class="absolute inset-0 rounded-full border border-white/40 bg-white/5 radar-ring-2"></div>
+        <div class="absolute inset-0 rounded-full border border-white/20 bg-white/5 radar-ring-3"></div>
         <!-- Center pickup pulse dot -->
-        <div class="w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-lg z-10"></div>
+        <div class="w-4 h-4 rounded-full bg-black border-2 border-white shadow-xl z-10"></div>
       </div>
     `;
 
@@ -102,14 +102,14 @@ export function SearchRadarOverlay({
         }
       `}</style>
 
-      {/* Screen/container center radar rings when not anchored or as fallback */}
+      {/* Screen/container center radar rings when not anchored or as fallback (Black & White) */}
       {!center && (
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
           <div className="relative w-48 h-48 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full border-2 border-emerald-500/60 bg-emerald-500/10 radar-ring-1" />
-            <div className="absolute inset-0 rounded-full border-2 border-emerald-500/40 bg-emerald-500/5 radar-ring-2" />
-            <div className="absolute inset-0 rounded-full border border-emerald-400/30 bg-emerald-400/5 radar-ring-3" />
-            <div className="w-5 h-5 rounded-full bg-emerald-500 border-2 border-white shadow-xl z-10 animate-pulse" />
+            <div className="absolute inset-0 rounded-full border-2 border-white/60 bg-white/10 radar-ring-1" />
+            <div className="absolute inset-0 rounded-full border-2 border-white/40 bg-white/5 radar-ring-2" />
+            <div className="absolute inset-0 rounded-full border border-white/20 bg-white/5 radar-ring-3" />
+            <div className="w-5 h-5 rounded-full bg-black border-2 border-white shadow-2xl z-10 animate-pulse" />
           </div>
         </div>
       )}
@@ -124,10 +124,10 @@ export function SearchRadarOverlay({
             style={{ left: `${pt.x}%`, top: `${pt.y}%` }}
           >
             <div className="relative w-36 h-36 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border border-emerald-500/60 bg-emerald-500/10 radar-ring-1" />
-              <div className="absolute inset-0 rounded-full border border-emerald-500/40 bg-emerald-500/5 radar-ring-2" />
-              <div className="absolute inset-0 rounded-full border border-emerald-400/20 bg-emerald-400/5 radar-ring-3" />
-              <div className="w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-lg z-10" />
+              <div className="absolute inset-0 rounded-full border border-white/60 bg-white/10 radar-ring-1" />
+              <div className="absolute inset-0 rounded-full border border-white/40 bg-white/5 radar-ring-2" />
+              <div className="absolute inset-0 rounded-full border border-white/20 bg-white/5 radar-ring-3" />
+              <div className="w-4 h-4 rounded-full bg-black border-2 border-white shadow-2xl z-10" />
             </div>
           </div>
         );

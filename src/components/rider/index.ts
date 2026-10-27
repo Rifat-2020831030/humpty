@@ -27,3 +27,6 @@ export { default as TripCompleted } from './TripCompleted';
 
 export * from './RatingScreen';
 export { default as RatingScreen } from './RatingScreen';
+
+export * from './DriverArrivedScreen';
+export { default as DriverArrivedScreen } from './DriverArrivedScreen';

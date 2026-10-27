@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Tag, Sparkles } from 'lucide-react';
 
 export interface OffersStripProps {
   onApplyPromo?: (code: string) => void;
   className?: string;
 }
 
-interface PromoOffer {
+export interface PromoOffer {
   id: string;
   code: string;
   title: string;
@@ -15,7 +16,7 @@ interface PromoOffer {
   details: string;
 }
 
-const OFFERS: PromoOffer[] = [
+export const OFFERS: PromoOffer[] = [
   {
     id: 'dhaka20',
     code: 'DHAKA20',
@@ -41,6 +42,15 @@ const OFFERS: PromoOffer[] = [
 
 export function OffersStrip({ onApplyPromo, className = '' }: OffersStripProps) {
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  // Auto-shift carousel cards from left to right every 5 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % OFFERS.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleApply = (code: string) => {
     setAppliedCode(code);
@@ -50,41 +60,75 @@ export function OffersStrip({ onApplyPromo, className = '' }: OffersStripProps) 
   };
 
   return (
-    <div className={`overflow-x-auto no-scrollbar py-1 ${className}`}>
-      <div className="flex gap-2.5 min-w-full">
-        {OFFERS.map((offer) => {
+    <div className={`relative w-full overflow-hidden ${className}`}>
+      {/* 3-Card Carousel Track */}
+      <div
+        className="flex transition-transform duration-500 ease-out"
+        style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+      >
+        {OFFERS.map((offer, idx) => {
           const isApplied = appliedCode === offer.code;
 
           return (
-            <div
-              key={offer.id}
-              className="flex-shrink-0 flex items-center justify-between gap-3 px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-xs"
-            >
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.5 font-medium text-neutral-200">
-                  <span className="text-emerald-400 font-mono font-bold tracking-wider">
-                    {offer.code}
-                  </span>
-                  <span className="text-neutral-500">•</span>
-                  <span className="text-emerald-300 font-semibold">{offer.discount}</span>
+            <div key={offer.id} className="w-full flex-shrink-0 px-0.5">
+              <div className="flex items-center justify-between gap-3 p-3 bg-gradient-to-r from-neutral-900 to-neutral-900/90 border border-neutral-800 hover:border-neutral-700 rounded-2xl text-xs shadow-md transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                    {idx === 0 ? (
+                      <Tag className="w-4 h-4" />
+                    ) : idx === 1 ? (
+                      <Sparkles className="w-4 h-4" />
+                    ) : (
+                      <span className="text-sm font-bold">🌙</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5 font-medium text-neutral-200">
+                      <span className="text-emerald-400 font-mono font-bold tracking-wider">
+                        {offer.code}
+                      </span>
+                      <span className="text-neutral-500">•</span>
+                      <span className="text-emerald-300 font-semibold">{offer.discount}</span>
+                    </div>
+                    <div className="text-[11px] text-neutral-400 leading-tight mt-0.5">
+                      {offer.details}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[11px] text-neutral-400">{offer.details}</div>
+
+                <button
+                  type="button"
+                  onClick={() => handleApply(offer.code)}
+                  disabled={isApplied}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                    isApplied
+                      ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/40'
+                      : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-sm'
+                  }`}
+                >
+                  {isApplied ? 'Applied ✓' : 'Apply'}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => handleApply(offer.code)}
-                disabled={isApplied}
-                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-                  isApplied
-                    ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/50'
-                }`}
-              >
-                {isApplied ? 'Applied ✓' : 'Apply'}
-              </button>
             </div>
           );
         })}
+      </div>
+
+      {/* 3 Indicators (Dots) */}
+      <div className="flex items-center justify-center gap-1.5 mt-2">
+        {OFFERS.map((_, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => setActiveIndex(idx)}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              activeIndex === idx
+                ? 'w-5 bg-emerald-500'
+                : 'w-1.5 bg-neutral-700 hover:bg-neutral-500'
+            }`}
+            aria-label={`Go to slide ${idx + 1}`}
+          />
+        ))}
       </div>
     </div>
   );

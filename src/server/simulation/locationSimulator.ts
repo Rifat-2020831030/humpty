@@ -24,70 +24,14 @@ export function stopDriverSimulation(rideId: string): void {
 }
 
 /**
- * Builds waypoints connecting start -> pickup -> dropoff, incorporating intermediate
- * Dhaka seed road points when they are along the travel path.
+ * Builds straight-line waypoints connecting start -> pickup -> dropoff.
  */
 function buildSimulationWaypoints(
   startCoord: [number, number],
   pickupCoord: [number, number],
   dropoffCoord: [number, number]
 ): [number, number][] {
-  const getIntermediateWaypoints = (
-    from: [number, number],
-    to: [number, number]
-  ): [number, number][] => {
-    const directDist = calculateDistance(from[0], from[1], to[0], to[1]);
-    if (directDist < 0.2) {
-      return [];
-    }
-
-    const nearestRoute = findNearestRoute(from);
-    // Find waypoints on the route that do not add a massive detour
-    const candidateWaypoints = nearestRoute.waypoints.filter(w => {
-      const d = calculateDistance(from[0], from[1], w[0], w[1]) + calculateDistance(w[0], w[1], to[0], to[1]);
-      return d <= 1.35 * directDist;
-    });
-
-    // Sort waypoints by distance from starting point
-    candidateWaypoints.sort((a, b) => {
-      const distA = calculateDistance(from[0], from[1], a[0], a[1]);
-      const distB = calculateDistance(from[0], from[1], b[0], b[1]);
-      return distA - distB;
-    });
-
-    return candidateWaypoints;
-  };
-
-  const waypointsToPickup = getIntermediateWaypoints(startCoord, pickupCoord);
-  const waypointsToDropoff = getIntermediateWaypoints(pickupCoord, dropoffCoord);
-
-  const rawWaypoints: [number, number][] = [
-    startCoord,
-    ...waypointsToPickup,
-    pickupCoord,
-    ...waypointsToDropoff,
-    dropoffCoord,
-  ];
-
-  // Deduplicate consecutive points within 5m of each other
-  const deduplicated: [number, number][] = [];
-  for (const pt of rawWaypoints) {
-    if (deduplicated.length === 0) {
-      deduplicated.push(pt);
-    } else {
-      const last = deduplicated[deduplicated.length - 1];
-      const distM = calculateDistance(last[0], last[1], pt[0], pt[1]) * 1000;
-      if (distM > 5) {
-        deduplicated.push(pt);
-      }
-    }
-  }
-
-  if (deduplicated.length < 2) {
-    return [startCoord, pickupCoord, dropoffCoord];
-  }
-
-  return deduplicated;
+  return [startCoord, pickupCoord, dropoffCoord];
 }
 
 /**

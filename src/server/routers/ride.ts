@@ -424,6 +424,13 @@ export const rideRouter = router({
         data: { status: 'IN_PROGRESS' },
       });
 
+      startDriverSimulation(
+        updated.id,
+        [updated.pickupLat, updated.pickupLng],
+        [updated.pickupLat, updated.pickupLng],
+        [updated.dropoffLat, updated.dropoffLng]
+      );
+
       const payload: StatusChangePayload = {
         rideId: updated.id,
         status: 'IN_PROGRESS',

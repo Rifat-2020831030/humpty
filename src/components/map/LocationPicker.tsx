@@ -66,16 +66,16 @@ export function LocationPicker({
     el.className =
       'location-picker-pin flex flex-col items-center cursor-grab active:cursor-grabbing select-none';
     el.innerHTML = `
-      <div class="px-2 py-0.5 mb-1 bg-neutral-900 border border-emerald-500/80 rounded shadow-md text-[11px] font-medium text-emerald-400 whitespace-nowrap">
+      <div class="px-2 py-0.5 mb-1 bg-black border border-white/80 rounded-md shadow-lg text-[11px] font-bold text-white whitespace-nowrap font-mono">
         ${label}
       </div>
-      <div class="w-8 h-8 rounded-full bg-emerald-600 border-2 border-white shadow-xl flex items-center justify-center text-white">
+      <div class="w-8 h-8 rounded-full bg-black border-2 border-white shadow-2xl flex items-center justify-center text-white">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
           <circle cx="12" cy="10" r="3"/>
         </svg>
       </div>
-      <div class="w-2 h-2 -mt-1 rotate-45 bg-emerald-600"></div>
+      <div class="w-2 h-2 -mt-1 rotate-45 bg-black border-r-2 border-b-2 border-white"></div>
     `;
 
     const marker = new maplibregl.Marker({
@@ -125,10 +125,10 @@ export function LocationPicker({
           style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
         >
           <div className="flex flex-col items-center">
-            <div className="px-2 py-0.5 mb-1 bg-neutral-900 border border-emerald-500/80 rounded shadow-md text-[11px] font-medium text-emerald-400 whitespace-nowrap">
+            <div className="px-2 py-0.5 mb-1 bg-black border border-white/80 rounded-md shadow-lg text-[11px] font-bold text-white whitespace-nowrap font-mono">
               {label}
             </div>
-            <div className="w-8 h-8 rounded-full bg-emerald-600 border-2 border-white shadow-xl flex items-center justify-center text-white">
+            <div className="w-8 h-8 rounded-full bg-black border-2 border-white shadow-2xl flex items-center justify-center text-white">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="18"
@@ -144,7 +144,7 @@ export function LocationPicker({
                 <circle cx="12" cy="10" r="3" />
               </svg>
             </div>
-            <div className="w-2 h-2 -mt-1 rotate-45 bg-emerald-600" />
+            <div className="w-2 h-2 -mt-1 rotate-45 bg-black border-r-2 border-b-2 border-white" />
           </div>
         </div>
       );

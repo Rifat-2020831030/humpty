@@ -137,6 +137,8 @@ describe('LocationSearch Component', () => {
 
     expect(html).toContain('[AI]');
     expect(html).toContain('AI Mode ON');
+    expect(html).toContain('Ask AI');
+    expect(html).toContain('AI Search Active');
     // Enforce design constraint: strictly avoid neon blues, violet/purple gradients
     expect(html).not.toContain('bg-purple');
     expect(html).not.toContain('from-purple');
@@ -210,6 +212,25 @@ describe('FareSelector Component', () => {
     expect(html).toContain('8.5 km');
     expect(html).toContain('Cash in BDT (৳)');
     expect(html).toContain('Confirm');
+    expect(html).toContain('Collapse Map');
+  });
+
+  it('renders compact collapsible view when isInitiallyCollapsed is true', () => {
+    const distanceKm = 8.5;
+    const html = ReactDOMServer.renderToStaticMarkup(
+      React.createElement(FareSelector, {
+        distanceKm,
+        selectedVehicle: 'BIKE',
+        onSelectVehicle: () => {},
+        onConfirm: () => {},
+        isInitiallyCollapsed: true,
+      })
+    );
+
+    expect(html).toContain('Expand Carousel');
+    expect(html).toContain('Change');
+    expect(html).toContain('Confirm');
+    expect(html).toContain('8.5 km');
   });
 });
 
