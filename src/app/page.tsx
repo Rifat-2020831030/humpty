@@ -51,9 +51,6 @@ export default function RoleSplashPage() {
       <header className="pt-6 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 border border-emerald-500/40 flex items-center justify-center font-black text-white text-xl shadow-lg">
-              G
-            </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-extrabold tracking-tight text-white">

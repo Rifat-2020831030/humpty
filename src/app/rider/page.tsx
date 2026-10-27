@@ -661,6 +661,8 @@ function RiderContent() {
           center={
             currentStep === 'MANUAL_PIN_PICKER'
               ? [centerPinCoord.lat, centerPinCoord.lng]
+              : (isTripActive || rideStatus === 'IN_PROGRESS') && driverCoord
+              ? [driverCoord.lat, driverCoord.lng]
               : [pickupCoord.lat, pickupCoord.lng]
           }
           zoom={14}
@@ -685,10 +687,11 @@ function RiderContent() {
           {/* Normal Mode Map Layers (hidden during Center-Pin manual picker mode) */}
           {currentStep !== 'MANUAL_PIN_PICKER' && (
             <>
-              {/* Pickup Marker */}
+              {/* Pickup / Starting Position Marker */}
               <LocationPicker
                 currentPin={pickupCoord}
-                label="Pickup"
+                label={isTripActive || rideStatus === 'IN_PROGRESS' ? 'Starting Position' : 'Pickup'}
+                draggable={!rideStatus || currentStep === 'LOCATION_SEARCH'}
                 onPinChange={(pos: { lat: number; lng: number }) => {
                   setPickupCoord({ lat: pos.lat, lng: pos.lng });
                   setManualPin(pos.lat, pos.lng);

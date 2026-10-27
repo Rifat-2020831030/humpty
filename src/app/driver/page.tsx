@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { trpc } from '@/trpc/client';
 import { TRPCProvider } from '@/trpc/Provider';
@@ -31,6 +31,7 @@ import {
   Radio,
   Clock,
   Sparkles,
+  Compass,
 } from 'lucide-react';
 
 // Dynamic client-only imports for map components
@@ -38,6 +39,7 @@ const MapBase = dynamic(() => import('@/components/map/MapBase'), { ssr: false }
 const DensityHeatmap = dynamic(() => import('@/components/map/DensityHeatmap'), { ssr: false });
 const RouteLayer = dynamic(() => import('@/components/map/RouteLayer'), { ssr: false });
 const DriverMarker = dynamic(() => import('@/components/map/DriverMarker'), { ssr: false });
+const LocationPicker = dynamic(() => import('@/components/map/LocationPicker'), { ssr: false });
 
 function DriverFlowContent() {
   const session = useSession();
@@ -74,6 +76,32 @@ function DriverFlowContent() {
     lng: defaultDriverSeed.lng,
     bearing: 0,
   });
+
+  // Map viewport center & zoom state
+  const [mapCenter, setMapCenter] = useState<[number, number]>([
+    defaultDriverSeed.lat,
+    defaultDriverSeed.lng,
+  ]);
+  const [mapZoom, setMapZoom] = useState<number>(14);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+
+  // Recenter map on driver location
+  const recenterOnDriver = useCallback((targetLat?: number, targetLng?: number) => {
+    const lat = targetLat ?? driverLocation.lat;
+    const lng = targetLng ?? driverLocation.lng;
+    setMapCenter([lat, lng]);
+    setMapZoom(15.5);
+
+    if (mapRef.current) {
+      mapRef.current.flyTo({
+        center: [lng, lat],
+        zoom: 15.5,
+        speed: 1.5,
+        curve: 1.42,
+        essential: true,
+      });
+    }
+  }, [driverLocation.lat, driverLocation.lng]);
 
   // High-demand passenger hotspot clusters centered around:
   // Location 1: 23.790584354558263, 90.39968461849804 (Banani / Kakoli Hub)
@@ -290,6 +318,7 @@ function DriverFlowContent() {
       setActiveRide((prev) =>
         prev ? { ...prev, status: updated.status as RideStatus } : null
       );
+      recenterOnDriver(updated.pickupLat, updated.pickupLng);
     },
   });
 
@@ -362,8 +391,21 @@ function DriverFlowContent() {
   const handleStartTrip = useCallback(() => {
     if (activeRide) {
       startTripMutation.mutate({ rideId: activeRide.id });
+      recenterOnDriver();
     }
-  }, [activeRide, startTripMutation]);
+  }, [activeRide, startTripMutation, recenterOnDriver]);
+
+  // Recenter map whenever trip status transitions to IN_PROGRESS
+  const prevRideStatusRef = useRef<RideStatus | undefined>(activeRide?.status);
+  useEffect(() => {
+    if (
+      activeRide?.status === 'IN_PROGRESS' &&
+      prevRideStatusRef.current !== 'IN_PROGRESS'
+    ) {
+      recenterOnDriver(activeRide.pickupLat, activeRide.pickupLng);
+    }
+    prevRideStatusRef.current = activeRide?.status;
+  }, [activeRide?.status, activeRide?.pickupLat, activeRide?.pickupLng, recenterOnDriver]);
 
   const handleCompleteTrip = useCallback(
     (fareFinal?: number) => {
@@ -438,10 +480,7 @@ function DriverFlowContent() {
       {/* Top Floating App Bar */}
       <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 pointer-events-none">
         {/* Brand Logo & Name */}
-        <div className="pointer-events-auto flex items-center gap-2.5 bg-neutral-950/90 border border-neutral-800 rounded-full px-4 py-2 shadow-xl backdrop-blur-md">
-          <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center font-black text-xs text-white">
-            G
-          </div>
+        <div className="pointer-events-auto flex items-center gap-2 bg-neutral-950/90 border border-neutral-800 rounded-full px-4 py-2 shadow-xl backdrop-blur-md">
           <span className="font-extrabold text-sm tracking-tight text-white">
             GariKoi <span className="text-emerald-400 font-semibold text-xs">DRIVER</span>
           </span>
@@ -498,9 +537,12 @@ function DriverFlowContent() {
       {/* Main Interactive Map Viewport */}
       <main className="relative flex-1 w-full h-full">
         <MapBase
-          center={[driverLocation.lat, driverLocation.lng]}
-          zoom={14}
+          center={mapCenter}
+          zoom={mapZoom}
           className="w-full h-full"
+          onMapLoad={(map) => {
+            mapRef.current = map;
+          }}
         >
           {/* Live Heatmap Layer: Renders passenger demand clusters when toggle is ON and not on active trip */}
           {showHeatmap && !activeRide && heatmapCells.length > 0 && (
@@ -517,6 +559,26 @@ function DriverFlowContent() {
             />
           )}
 
+          {/* Pickup / Starting Position Pin on Driver Map */}
+          {activeRide && (
+            <LocationPicker
+              currentPin={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }}
+              label={activeRide.status === 'IN_PROGRESS' ? 'Starting Position' : 'Pickup'}
+              draggable={false}
+              showBadge={false}
+            />
+          )}
+
+          {/* Destination Drop-off Pin on Driver Map */}
+          {activeRide && (
+            <LocationPicker
+              currentPin={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }}
+              label="Drop-off"
+              draggable={false}
+              showBadge={false}
+            />
+          )}
+
           {/* Live Driver Position Marker */}
           <DriverMarker
             position={[driverLocation.lat, driverLocation.lng]}
@@ -524,6 +586,19 @@ function DriverFlowContent() {
             vehicleType={activeRide?.vehicleType ?? selectedVehicle}
           />
         </MapBase>
+
+        {/* Floating Quick-Recenter Button on Driver Location */}
+        <div className="absolute right-4 bottom-24 z-20 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => recenterOnDriver()}
+            aria-label="Recenter map on driver"
+            title="Recenter on your location"
+            className="w-10 h-10 rounded-full bg-neutral-900/90 hover:bg-neutral-800 active:scale-95 border border-neutral-700 text-white shadow-xl backdrop-blur-md flex items-center justify-center transition-all cursor-pointer"
+          >
+            <Compass className="w-5 h-5 text-emerald-400" />
+          </button>
+        </div>
       </main>
 
       {/* Bottom Floating Control Panel: Switches dynamically based on driver flow state */}

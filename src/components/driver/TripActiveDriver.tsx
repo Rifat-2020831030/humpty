@@ -106,18 +106,36 @@ export function TripActiveDriver({
         </div>
       </div>
 
-      {/* Destination Address Card */}
-      <div className="flex items-start gap-3 bg-neutral-900/60 border border-neutral-800 rounded-xl p-3.5">
-        <div className="mt-0.5 w-7 h-7 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
-          <MapPin className="w-4 h-4 text-emerald-400" />
+      {/* Route Locations: Starting Position & Destination */}
+      <div className="flex flex-col gap-2.5 bg-neutral-900/60 border border-neutral-800 rounded-xl p-3.5">
+        {/* Starting Position (changes from Pickup to Starting Position when trip starts) */}
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 w-7 h-7 rounded-full bg-amber-950/80 border border-amber-500/80 flex items-center justify-center shrink-0">
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          </div>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider">
+              {isInProgress ? 'Starting Position' : 'Pickup Point'}
+            </span>
+            <span className="text-xs font-semibold text-neutral-200 mt-0.5 leading-snug truncate">
+              {ride.pickupAddress}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-            Destination Drop-off
-          </span>
-          <span className="text-sm font-bold text-white mt-0.5 leading-snug">
-            {ride.dropoffAddress}
-          </span>
+
+        {/* Destination Drop-off */}
+        <div className="flex items-start gap-3 pt-2.5 border-t border-neutral-800/80">
+          <div className="mt-0.5 w-7 h-7 rounded-full bg-emerald-950/80 border border-emerald-500/80 flex items-center justify-center shrink-0">
+            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-emerald-400/90 uppercase tracking-wider">
+              Destination Drop-off
+            </span>
+            <span className="text-xs font-bold text-white mt-0.5 leading-snug">
+              {ride.dropoffAddress}
+            </span>
+          </div>
         </div>
       </div>
 

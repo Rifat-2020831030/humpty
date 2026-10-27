@@ -93,9 +93,6 @@ export function HomeScreen({
       {/* Top Fixed / Floating Pathao-style Brand Header */}
       <header className="sticky top-0 z-30 px-4 py-3 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-850 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center font-black text-white text-lg shadow-md shadow-emerald-900/30">
-            G
-          </div>
           <div>
             <h1 className="text-sm font-extrabold tracking-tight text-white flex items-center gap-1.5">
               <span>GariKoi</span>

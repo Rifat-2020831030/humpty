@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "postinstall": "prisma generate",
     "test": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vitest run --no-file-parallelism",
     "test:watch": "vitest",
     "dev:ws": "tsx server.ts"

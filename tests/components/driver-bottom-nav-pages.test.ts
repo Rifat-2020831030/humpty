@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { DriverBottomNav } from '../../src/components/driver/DriverBottomNav';
+import { OnlineToggle } from '../../src/components/driver/OnlineToggle';
 import DriverEarningsPage from '../../src/app/driver/earnings/page';
 import DriverTripsPage from '../../src/app/driver/trips/page';
 import DriverProfilePage from '../../src/app/driver/profile/page';
@@ -87,5 +88,39 @@ describe('Driver Profile Page', () => {
     expect(html).toContain('Toyota Axio');
     expect(html).toContain('BRTA Registration');
     expect(html).toContain('Switch to Rider Mode');
+  });
+});
+
+describe('OnlineToggle Collapsible Behavior', () => {
+  it('renders expanded by default with vehicle categories and collapse button', () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      React.createElement(OnlineToggle, {
+        isOnline: false,
+        onToggleOnline: () => {},
+        selectedVehicle: 'BIKE',
+        sessionEarnings: 1500,
+        completedTripsCount: 8,
+        driverName: 'Rahim',
+        defaultCollapsed: false,
+      })
+    );
+    expect(html).toContain('Select Vehicle Category');
+    expect(html).toContain('aria-label="Collapse driver panel"');
+  });
+
+  it('renders collapsed view when defaultCollapsed is true, hiding vehicle selector', () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      React.createElement(OnlineToggle, {
+        isOnline: false,
+        onToggleOnline: () => {},
+        selectedVehicle: 'BIKE',
+        sessionEarnings: 1500,
+        completedTripsCount: 8,
+        driverName: 'Rahim',
+        defaultCollapsed: true,
+      })
+    );
+    expect(html).toContain('aria-label="Expand driver panel"');
+    expect(html).not.toContain('Select Vehicle Category');
   });
 });

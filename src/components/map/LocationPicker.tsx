@@ -14,6 +14,7 @@ export interface LocationPickerProps {
   className?: string;
   showBadge?: boolean;
   label?: string;
+  draggable?: boolean;
 }
 
 export function LocationPicker({
@@ -24,6 +25,7 @@ export function LocationPicker({
   className = 'w-full h-full min-h-[350px]',
   showBadge = true,
   label = 'Pickup',
+  draggable = true,
 }: LocationPickerProps) {
   const context = useMap();
   const isInParentMap = !!context.isInMapBase;
@@ -80,20 +82,22 @@ export function LocationPicker({
 
     const marker = new maplibregl.Marker({
       element: el,
-      draggable: true,
+      draggable: Boolean(draggable),
       anchor: 'bottom',
     })
       .setLngLat([pinPosition.lng, pinPosition.lat])
       .addTo(map);
 
-    marker.on('dragend', () => {
-      const lngLat = marker.getLngLat();
-      const updated = { lat: lngLat.lat, lng: lngLat.lng };
-      setPinPosition(updated);
-      if (onPinChangeRef.current) {
-        onPinChangeRef.current(updated);
-      }
-    });
+    if (draggable) {
+      marker.on('dragend', () => {
+        const lngLat = marker.getLngLat();
+        const updated = { lat: lngLat.lat, lng: lngLat.lng };
+        setPinPosition(updated);
+        if (onPinChangeRef.current) {
+          onPinChangeRef.current(updated);
+        }
+      });
+    }
 
     markerRef.current = marker;
 
@@ -101,7 +105,7 @@ export function LocationPicker({
       marker.remove();
       markerRef.current = null;
     };
-  }, [isInParentMap, context.map, label]);
+  }, [isInParentMap, context.map, label, draggable]);
 
   const handleStandaloneMapClick = (coords: { lat: number; lng: number }) => {
     setPinPosition(coords);
