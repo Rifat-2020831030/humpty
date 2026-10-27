@@ -349,11 +349,16 @@ export const rideRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Ride not found' });
       }
 
-      const cancellableStatuses: RideStatus[] = ['SEARCHING', 'DRIVER_ASSIGNED', 'DRIVER_EN_ROUTE'];
+      const cancellableStatuses: RideStatus[] = [
+        'SEARCHING',
+        'DRIVER_ASSIGNED',
+        'DRIVER_EN_ROUTE',
+        'ARRIVED_AT_PICKUP',
+      ];
       if (!cancellableStatuses.includes(ride.status as RideStatus)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: `Cannot cancel ride with status ${ride.status}. Allowed only in SEARCHING, DRIVER_ASSIGNED, or DRIVER_EN_ROUTE.`,
+          message: `Cannot cancel ride with status ${ride.status}. Allowed only in SEARCHING, DRIVER_ASSIGNED, DRIVER_EN_ROUTE, or ARRIVED_AT_PICKUP.`,
         });
       }
 
@@ -379,7 +384,7 @@ export const rideRouter = router({
     .input(
       z.object({
         rideId: z.string(),
-        rating: z.number().min(1).max(5),
+        rating: z.number().int().min(1).max(5),
         feedback: z.string().optional(),
       })
     )
