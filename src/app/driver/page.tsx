@@ -231,18 +231,6 @@ function DriverFlowContent() {
     activeRide?.dropoffLng,
   ]);
 
-  // Quick action to simulate a demo ride in one click
-  const handleSimulateDemoRide = useCallback(() => {
-    setIncomingRide({
-      rideId: `demo-${Date.now()}`,
-      vehicleType: selectedVehicle,
-      pickupAddress: 'Gulshan 2 Circle, Dhaka',
-      dropoffAddress: 'Dhanmondi 27, Dhaka',
-      fareEstimate: 240,
-      distanceKm: 6.5,
-    });
-  }, [selectedVehicle]);
-
   // tRPC Driver Workflow Mutations
   const acceptMutation = trpc.ride.accept.useMutation({
     onSuccess(ride) {
@@ -553,17 +541,6 @@ function DriverFlowContent() {
                 completedTripsCount={completedTripsCount}
                 driverName={defaultDriverSeed.name}
               />
-              {flowState === 'ONLINE_STANDBY' && (
-                <div className="mt-2 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={handleSimulateDemoRide}
-                    className="px-3 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white text-xs font-semibold rounded-full shadow-lg border border-emerald-400/40 backdrop-blur-sm transition-all"
-                  >
-                    ⚡ Demo: Simulate Incoming Ride
-                  </button>
-                </div>
-              )}
               <div className="mt-2.5">
                 <DriverBottomNav activeTab="drive" className="rounded-2xl border border-neutral-800 shadow-xl" />
               </div>
