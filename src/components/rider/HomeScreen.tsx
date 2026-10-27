@@ -28,15 +28,17 @@ export function HomeScreen({
   children,
 }: HomeScreenProps) {
   return (
-    <div className={`relative flex flex-col h-full w-full bg-black text-white ${className}`}>
-      {/* Top Header Bar */}
-      <header className="absolute top-0 inset-x-0 z-30 p-4 bg-gradient-to-b from-black/90 via-black/60 to-transparent flex items-center justify-between pointer-events-auto">
-        <div className="flex items-center gap-2">
+    <div
+      className={`relative flex flex-col justify-between h-full w-full pointer-events-none ${className}`}
+    >
+      {/* Top Floating Glass Header Bar */}
+      <header className="p-3 sm:p-3.5 bg-neutral-950/90 backdrop-blur-md border border-neutral-800 rounded-2xl shadow-xl flex items-center justify-between pointer-events-auto">
+        <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-black text-white text-base shadow">
             G
           </div>
           <div>
-            <h1 className="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
+            <h1 className="text-sm font-extrabold tracking-tight text-white flex items-center gap-1.5">
               <span>GariKoi</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
             </h1>
@@ -45,20 +47,18 @@ export function HomeScreen({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="px-2.5 py-1 bg-neutral-900/90 border border-neutral-800 rounded-full text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+          <div className="px-2.5 py-1 bg-neutral-900/90 border border-neutral-800 rounded-full text-[11px] font-mono text-emerald-400 flex items-center gap-1 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>{nearbyDriversCount} drivers nearby</span>
           </div>
         </div>
       </header>
 
-      {/* Central Map Area (passed via children or rendered as container) */}
-      <div className="relative flex-1 w-full h-full min-h-[300px]">
-        {children}
-      </div>
+      {/* Central Map Area (completely transparent and click-through) */}
+      <div className="flex-1 pointer-events-none">{children}</div>
 
       {/* Bottom Floating Control Deck */}
-      <div className="relative z-30 w-full p-4 bg-neutral-950/95 backdrop-blur-md border-t border-neutral-800/90 rounded-t-3xl shadow-2xl space-y-3 pointer-events-auto">
+      <div className="w-full p-3.5 sm:p-4 bg-neutral-950/95 backdrop-blur-md border border-neutral-800/90 rounded-3xl shadow-2xl space-y-3 pointer-events-auto">
         {/* Destination Search Bar Pill */}
         <button
           type="button"

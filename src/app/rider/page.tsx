@@ -392,7 +392,7 @@ function RiderContent() {
       </div>
 
       {/* Main Overlay State Machine */}
-      <div className="relative z-20 flex-1 flex flex-col justify-between pointer-events-none p-3 max-w-md mx-auto w-full">
+      <div className="relative z-20 h-full flex-1 flex flex-col justify-between pointer-events-none p-3 max-w-md mx-auto w-full">
         {/* Step: RATING SCREEN */}
         {rideStatus === 'RATED' || currentStep === 'RATING_SCREEN' ? (
           <div className="my-auto pointer-events-auto">
@@ -513,7 +513,7 @@ function RiderContent() {
           </div>
         ) : (
           /* Step: HOME SCREEN */
-          <div className="h-full w-full pointer-events-auto">
+          <div className="h-full w-full pointer-events-none flex flex-col justify-between">
             <HomeScreen
               selectedVehicle={selectedVehicle}
               onSelectVehicle={setSelectedVehicle}
