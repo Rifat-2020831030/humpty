@@ -12,12 +12,27 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 
 export function createWSS(server: http.Server) {
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ noServer: true });
   const handler = applyWSSHandler({
     wss,
     router: appRouter,
     createContext: () => createTRPCContext(),
   });
+
+  const onUpgrade = (req: http.IncomingMessage, socket: any, head: Buffer) => {
+    const { pathname } = parse(req.url || '', true);
+
+    // Let Next.js handle its own internal WebSocket upgrades (e.g. Fast Refresh HMR at /_next/webpack-hmr)
+    if (pathname?.startsWith('/_next/')) {
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, (client) => {
+      wss.emit('connection', client, req);
+    });
+  };
+
+  server.on('upgrade', onUpgrade);
 
   return { wss, handler };
 }
@@ -34,6 +49,11 @@ export async function startServer() {
       res.end('Internal Server Error');
     }
   });
+
+  // Attach Next.js dev server WebSocket handler first so HMR works without interference
+  if (dev && typeof (app as any).setupWebSocketHandler === 'function') {
+    (app as any).setupWebSocketHandler(server);
+  }
 
   const { wss, handler } = createWSS(server);
 

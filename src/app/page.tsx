@@ -1,19 +1,17 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useSession } from '@/hooks/useSession';
+import { useSession } from "@/hooks/useSession";
 import {
-  Car,
+  ArrowRight,
   Compass,
   MapPin,
-  Sparkles,
+  Radio,
   RotateCcw,
   ShieldCheck,
-  Radio,
-  ArrowRight,
-} from 'lucide-react';
+  Sparkles,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
 
 export default function RoleSplashPage() {
   let router: ReturnType<typeof useRouter> | null = null;
@@ -31,17 +29,17 @@ export default function RoleSplashPage() {
     setMounted(true);
   }, []);
 
-  const handleSelectRole = (newRole: 'RIDER' | 'DRIVER') => {
+  const handleSelectRole = (newRole: "RIDER" | "DRIVER") => {
     setRole(newRole);
     if (router) {
-      router.push(newRole === 'RIDER' ? '/rider' : '/driver');
-    } else if (typeof window !== 'undefined') {
-      window.location.href = newRole === 'RIDER' ? '/rider' : '/driver';
+      router.push(newRole === "RIDER" ? "/rider" : "/driver");
+    } else if (typeof window !== "undefined") {
+      window.location.href = newRole === "RIDER" ? "/rider" : "/driver";
     }
   };
 
   const handleResetSession = () => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       localStorage.clear();
       window.location.reload();
     }
@@ -66,7 +64,7 @@ export default function RoleSplashPage() {
                 </span>
               </div>
               <p className="text-[11px] text-neutral-400 font-medium">
-                Dhaka Rideshare Demo • Zero Auth
+                Dhaka Rideshare Demo
               </p>
             </div>
           </div>
@@ -82,16 +80,11 @@ export default function RoleSplashPage() {
       <section className="my-auto py-6 space-y-6">
         <div className="space-y-2">
           <span className="text-[11px] font-mono uppercase tracking-widest text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60">
-            Permission Flexibility Demo
+            Ridesharing App Demo
           </span>
           <h2 className="text-3xl font-black text-white tracking-tight leading-tight">
             How would you like to use GariKoi today?
           </h2>
-          <p className="text-xs text-neutral-400 leading-relaxed">
-            Select your role for this session. In this demo, you have complete
-            freedom: search destinations, toggle AI natural language search, use
-            live GPS, or manually pin any Dhaka road coordinates.
-          </p>
         </div>
 
         {/* Feature Pillars */}
@@ -99,7 +92,9 @@ export default function RoleSplashPage() {
           <div className="p-3 bg-neutral-950 border border-neutral-800/80 rounded-xl flex items-start gap-2">
             <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold text-white block">Flexible Location</span>
+              <span className="font-bold text-white block">
+                Flexible Location
+              </span>
               <span className="text-neutral-500 text-[10px]">
                 Search, manual pin, or live GPS
               </span>
@@ -129,7 +124,9 @@ export default function RoleSplashPage() {
           <div className="p-3 bg-neutral-950 border border-neutral-800/80 rounded-xl flex items-start gap-2">
             <Radio className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold text-white block">Live Demand Heatmap</span>
+              <span className="font-bold text-white block">
+                Live Demand Heatmap
+              </span>
               <span className="text-neutral-500 text-[10px]">
                 Real-time driver density analytics
               </span>
@@ -142,7 +139,7 @@ export default function RoleSplashPage() {
           {/* Rider Button */}
           <button
             type="button"
-            onClick={() => handleSelectRole('RIDER')}
+            onClick={() => handleSelectRole("RIDER")}
             className="w-full p-4 rounded-2xl bg-neutral-900/90 hover:bg-neutral-850 border border-neutral-800 hover:border-emerald-600 transition-all text-left flex items-center justify-between group active:scale-[0.98] cursor-pointer shadow-lg"
           >
             <div className="flex items-center gap-3.5">
@@ -169,7 +166,7 @@ export default function RoleSplashPage() {
           {/* Driver Button */}
           <button
             type="button"
-            onClick={() => handleSelectRole('DRIVER')}
+            onClick={() => handleSelectRole("DRIVER")}
             className="w-full p-4 rounded-2xl bg-neutral-900/90 hover:bg-neutral-850 border border-neutral-800 hover:border-emerald-600 transition-all text-left flex items-center justify-between group active:scale-[0.98] cursor-pointer shadow-lg"
           >
             <div className="flex items-center gap-3.5">
@@ -200,9 +197,11 @@ export default function RoleSplashPage() {
         <div className="flex items-center gap-2 truncate">
           <ShieldCheck className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
           <span className="truncate">
-            Session:{' '}
+            Session:{" "}
             <span className="font-mono text-neutral-400">
-              {mounted && sessionId ? `${sessionId.slice(0, 8)}...` : 'Ephemeral'}
+              {mounted && sessionId
+                ? `${sessionId.slice(0, 8)}...`
+                : "Ephemeral"}
             </span>
           </span>
         </div>
