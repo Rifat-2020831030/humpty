@@ -24,10 +24,10 @@ export function createWSS(server: http.Server) {
 
 export async function startServer() {
   await app.prepare();
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url!, true);
-      handle(req, res, parsedUrl);
+      await handle(req, res, parsedUrl);
     } catch (err) {
       console.error('Error handling request:', err);
       res.statusCode = 500;
