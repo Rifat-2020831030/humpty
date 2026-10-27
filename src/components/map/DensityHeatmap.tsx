@@ -11,13 +11,15 @@ export interface DensityHeatmapProps {
   id?: string;
   opacity?: number;
   map?: maplibregl.Map | null;
+  colorScheme?: 'yellow' | 'emerald';
 }
 
 export function DensityHeatmap({
   cells,
   id = 'density-heatmap',
-  opacity = 0.8,
+  opacity = 0.82,
   map: propMap,
+  colorScheme = 'yellow',
 }: DensityHeatmapProps) {
   const context = useMap();
   const map = propMap ?? context.map;
@@ -45,13 +47,50 @@ export function DensityHeatmap({
         source.setData(data);
       }
 
+      // Color ramps: Default vibrant yellow/amber/orange glow or classic emerald
+      const yellowColorRamp = [
+        'interpolate',
+        ['linear'],
+        ['heatmap-density'],
+        0,
+        'rgba(255, 235, 59, 0)',
+        0.12,
+        'rgba(254, 240, 138, 0.45)',
+        0.3,
+        'rgba(253, 224, 71, 0.75)',
+        0.55,
+        'rgba(250, 204, 21, 0.9)',
+        0.75,
+        'rgba(245, 158, 11, 0.95)',
+        0.92,
+        'rgba(234, 88, 12, 1)',
+        1,
+        'rgba(220, 38, 38, 1)',
+      ] as unknown as maplibregl.ExpressionSpecification;
+
+      const emeraldColorRamp = [
+        'interpolate',
+        ['linear'],
+        ['heatmap-density'],
+        0,
+        'rgba(0, 106, 78, 0)',
+        0.2,
+        'rgba(4, 120, 87, 0.35)',
+        0.4,
+        'rgba(16, 185, 129, 0.6)',
+        0.7,
+        'rgba(52, 211, 153, 0.85)',
+        1,
+        'rgba(110, 231, 183, 1)',
+      ] as unknown as maplibregl.ExpressionSpecification;
+
       // Add native MapLibre GL heatmap layer
       if (!map.getLayer(layerId)) {
         map.addLayer({
           id: layerId,
           type: 'heatmap',
           source: sourceId,
-          maxzoom: 16,
+          maxzoom: 19,
           paint: {
             // Increase the heatmap weight based on frequency and property magnitude
             'heatmap-weight': [
@@ -59,48 +98,49 @@ export function DensityHeatmap({
               ['linear'],
               ['get', 'intensity'],
               0,
-              0,
+              0.15,
+              2,
+              0.5,
+              5,
+              0.85,
               10,
-              1,
+              1.2,
             ],
-            // Increase the heatmap color weight weight by zoom level
-            // heatmap-intensity is a multiplier on top of heatmap-weight
+            // Heatmap intensity multiplier across zoom levels for solid glow
             'heatmap-intensity': [
               'interpolate',
               ['linear'],
               ['zoom'],
+              9,
+              0.9,
               11,
-              1,
+              1.3,
+              13,
+              1.8,
               15,
-              3,
+              2.6,
+              18,
+              3.5,
             ],
-            // Color ramp for heatmap: transparent -> subtle teal -> rich emerald -> bright green
-            'heatmap-color': [
-              'interpolate',
-              ['linear'],
-              ['heatmap-density'],
-              0,
-              'rgba(0, 106, 78, 0)',
-              0.2,
-              'rgba(4, 120, 87, 0.35)',
-              0.4,
-              'rgba(16, 185, 129, 0.6)',
-              0.7,
-              'rgba(52, 211, 153, 0.85)',
-              1,
-              'rgba(110, 231, 183, 1)',
-            ],
-            // Adjust the heatmap radius by zoom level
+            // Color ramp for heatmap: vibrant yellow -> glowing gold -> amber orange -> red
+            'heatmap-color': colorScheme === 'emerald' ? emeraldColorRamp : yellowColorRamp,
+            // Larger heatmap radius for higher range
             'heatmap-radius': [
               'interpolate',
               ['linear'],
               ['zoom'],
+              9,
+              35,
               11,
-              18,
+              58,
+              13,
+              90,
               15,
-              38,
+              135,
+              17,
+              195,
             ],
-            // Transition from heatmap to circle layer by zoom level
+            // Heatmap layer opacity
             'heatmap-opacity': opacity,
           },
         });
@@ -126,7 +166,7 @@ export function DensityHeatmap({
       }
       layerAddedRef.current = false;
     };
-  }, [map, sourceId, layerId]);
+  }, [map, sourceId, layerId, colorScheme]);
 
   // Update source data when cells change in WebGL mode
   useEffect(() => {
@@ -155,21 +195,25 @@ export function DensityHeatmap({
         {cells.map((c, i) => {
           const pt = context.project!({ lat: c.lat, lng: c.lng });
           if (!pt) return null;
+          const intensity = 'intensity' in c ? c.intensity : 6;
           const radius = Math.min(
-            32,
-            Math.max(14, ('intensity' in c ? c.intensity : 1) * 6)
+            110,
+            Math.max(45, intensity * 11)
           );
           return (
             <div
               key={i}
-              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full blur-md"
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
               style={{
                 left: `${pt.x}%`,
                 top: `${pt.y}%`,
                 width: `${radius * 2}px`,
                 height: `${radius * 2}px`,
+                filter: 'blur(28px)',
                 background:
-                  'radial-gradient(circle, rgba(16,185,129,0.7) 0%, rgba(5,150,105,0.3) 60%, transparent 100%)',
+                  colorScheme === 'emerald'
+                    ? 'radial-gradient(circle, rgba(16,185,129,0.75) 0%, rgba(5,150,105,0.4) 60%, transparent 100%)'
+                    : 'radial-gradient(circle, rgba(253,224,71,0.9) 0%, rgba(250,204,21,0.7) 35%, rgba(245,158,11,0.45) 65%, transparent 100%)',
               }}
             />
           );

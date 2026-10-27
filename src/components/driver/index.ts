@@ -9,3 +9,5 @@ export * from './TripActiveDriver';
 export { default as TripActiveDriver } from './TripActiveDriver';
 export * from './TripCompletedDriver';
 export { default as TripCompletedDriver } from './TripCompletedDriver';
+export * from './DriverBottomNav';
+export { default as DriverBottomNav } from './DriverBottomNav';

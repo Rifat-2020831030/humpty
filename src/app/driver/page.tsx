@@ -21,6 +21,7 @@ import {
   getDriverFlowState,
   formatBDT,
   IncomingRideData,
+  DriverBottomNav,
 } from '@/components/driver';
 import {
   Shield,
@@ -74,39 +75,58 @@ function DriverFlowContent() {
     bearing: 0,
   });
 
-  // Heatmap density cells
-  const [heatmapCells, setHeatmapCells] = useState<HeatmapCell[]>([]);
+  // High-demand passenger hotspot clusters centered around:
+  // Location 1: 23.790584354558263, 90.39968461849804 (Banani / Kakoli Hub)
+  // Location 2: 23.778363865941, 90.39804578897022 (Mohakhali Hub)
+  const PASSENGER_HEATMAP_HOTSPOTS: HeatmapCell[] = useMemo(
+    () => [
+      // --- Location 1: Banani / Kakoli Hub (Epicenter + Wide Range Coverage) ---
+      { lat: 23.790584354558263, lng: 90.39968461849804, intensity: 10 },
+      { lat: 23.7922, lng: 90.4010, intensity: 8 },
+      { lat: 23.7890, lng: 90.3982, intensity: 8 },
+      { lat: 23.7925, lng: 90.3980, intensity: 7 },
+      { lat: 23.7885, lng: 90.4015, intensity: 7 },
+      { lat: 23.7908, lng: 90.4030, intensity: 7 },
+      { lat: 23.7902, lng: 90.3965, intensity: 7 },
+      { lat: 23.7935, lng: 90.3998, intensity: 6 },
+      { lat: 23.7875, lng: 90.3995, intensity: 6 },
+
+      // --- Location 2: Mohakhali Hub (Epicenter + Wide Range Coverage) ---
+      { lat: 23.778363865941, lng: 90.39804578897022, intensity: 10 },
+      { lat: 23.7802, lng: 90.3995, intensity: 8 },
+      { lat: 23.7765, lng: 90.3966, intensity: 8 },
+      { lat: 23.7805, lng: 90.3962, intensity: 7 },
+      { lat: 23.7762, lng: 90.3998, intensity: 7 },
+      { lat: 23.7786, lng: 90.4014, intensity: 7 },
+      { lat: 23.7781, lng: 90.3948, intensity: 7 },
+      { lat: 23.7815, lng: 90.3982, intensity: 6 },
+      { lat: 23.7752, lng: 90.3978, intensity: 6 },
+    ],
+    []
+  );
+
+  // Heatmap density cells - pre-populated with high-demand passenger hotspots
+  const [heatmapCells, setHeatmapCells] = useState<HeatmapCell[]>(PASSENGER_HEATMAP_HOTSPOTS);
+
+  // Heatmap visibility toggle - defaults to OFF
+  const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
 
   // Active in-flight ride & incoming alert state
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [incomingRide, setIncomingRide] = useState<IncomingRideData | null>(null);
 
-  // Fallback dummy heatmap hotspots for Dhaka
-  const DUMMY_HEATMAP: HeatmapCell[] = useMemo(
-    () => [
-      { lat: 23.7925, lng: 90.4078, intensity: 4 }, // Gulshan 2
-      { lat: 23.7936, lng: 90.4043, intensity: 3 }, // Banani 11
-      { lat: 23.7465, lng: 90.3760, intensity: 5 }, // Dhanmondi 27
-      { lat: 23.7275, lng: 90.4194, intensity: 3 }, // Motijheel
-      { lat: 23.8759, lng: 90.3795, intensity: 4 }, // Uttara Sector 3
-      { lat: 23.7771, lng: 90.3995, intensity: 2 }, // Mohakhali
-    ],
-    []
-  );
-
   // Poll driver demand heatmap every 8s
   const densityQuery = trpc.driver.getDensity.useQuery(undefined, {
-    enabled: isOnline,
-    refetchInterval: isOnline ? 8000 : false,
+    refetchInterval: 8000,
   });
 
   useEffect(() => {
     if (densityQuery.data && densityQuery.data.length > 0) {
-      setHeatmapCells(densityQuery.data);
-    } else if (isOnline) {
-      setHeatmapCells(DUMMY_HEATMAP);
+      setHeatmapCells([...PASSENGER_HEATMAP_HOTSPOTS, ...densityQuery.data]);
+    } else {
+      setHeatmapCells(PASSENGER_HEATMAP_HOTSPOTS);
     }
-  }, [densityQuery.data, isOnline, DUMMY_HEATMAP]);
+  }, [densityQuery.data, PASSENGER_HEATMAP_HOTSPOTS]);
 
   // Poll for incoming rides via HTTP (1.5s interval)
   const pendingRideQuery = trpc.ride.getPending.useQuery(
@@ -439,15 +459,37 @@ function DriverFlowContent() {
           </span>
         </div>
 
-        {/* Status Indicator & Live Demand Pill */}
+        {/* Controls: Heatmap Toggle & Online Status Indicator */}
         <div className="pointer-events-auto flex items-center gap-2">
-          {isOnline && heatmapCells.length > 0 && !activeRide && (
-            <div className="flex items-center gap-1.5 bg-neutral-950/90 border border-neutral-800 px-3 py-1.5 rounded-full text-xs font-semibold text-emerald-400 shadow-xl backdrop-blur-md">
-              <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-              <span>High Demand Areas</span>
+          {/* On-Off Heatmap Toggle Button (Defaults to OFF) */}
+          <button
+            type="button"
+            onClick={() => setShowHeatmap((prev) => !prev)}
+            aria-label="Toggle passenger heatmap"
+            title={showHeatmap ? 'Turn off passenger heatmap' : 'Turn on passenger heatmap'}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border shadow-xl backdrop-blur-md transition-all active:scale-95 cursor-pointer ${
+              showHeatmap
+                ? 'bg-amber-950/80 border-amber-500/70 text-amber-300 shadow-amber-500/20'
+                : 'bg-neutral-950/90 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
+            }`}
+          >
+            <Flame
+              className={`w-3.5 h-3.5 transition-colors ${
+                showHeatmap ? 'text-amber-400 fill-amber-400 animate-pulse' : 'text-neutral-500'
+              }`}
+            />
+            <span className="hidden sm:inline">Heatmap:</span>
+            <span className="font-bold">{showHeatmap ? 'ON' : 'OFF'}</span>
+            <div
+              className={`w-7 h-4 rounded-full p-0.5 transition-colors flex items-center ${
+                showHeatmap ? 'bg-amber-500 justify-end' : 'bg-neutral-700 justify-start'
+              }`}
+            >
+              <div className="w-3 h-3 rounded-full bg-white shadow-sm transition-transform" />
             </div>
-          )}
+          </button>
 
+          {/* Online/Offline Status */}
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border shadow-xl backdrop-blur-md ${
               isOnline
@@ -472,9 +514,9 @@ function DriverFlowContent() {
           zoom={14}
           className="w-full h-full"
         >
-          {/* Live Heatmap Layer: Renders live rider demand clusters when Online and not on active trip */}
-          {isOnline && !activeRide && heatmapCells.length > 0 && (
-            <DensityHeatmap cells={heatmapCells} opacity={0.75} />
+          {/* Live Heatmap Layer: Renders passenger demand clusters when toggle is ON and not on active trip */}
+          {showHeatmap && !activeRide && heatmapCells.length > 0 && (
+            <DensityHeatmap cells={heatmapCells} opacity={0.85} />
           )}
 
           {/* Active Navigation / Trip Route Layer */}
@@ -522,6 +564,9 @@ function DriverFlowContent() {
                   </button>
                 </div>
               )}
+              <div className="mt-2.5">
+                <DriverBottomNav activeTab="drive" className="rounded-2xl border border-neutral-800 shadow-xl" />
+              </div>
             </>
           )}
 
