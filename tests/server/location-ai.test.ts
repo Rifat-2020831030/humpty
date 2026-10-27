@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { DHAKA_CENTER } from '../../src/lib/constants';
 import {
   resolveNaturalLanguageLocation,
   getDhakaLandmarksAutocomplete,
@@ -62,8 +63,8 @@ describe('AI Location Resolver and Location Router', () => {
 
     it('falls back to Dhaka city center if no landmark and no context provided', async () => {
       const result = await resolveNaturalLanguageLocation('unrecognized place nowhere in records');
-      expect(result.lat).toBeCloseTo(23.8103, 2);
-      expect(result.lng).toBeCloseTo(90.4125, 2);
+      expect(result.lat).toBeCloseTo(DHAKA_CENTER[0], 2);
+      expect(result.lng).toBeCloseTo(DHAKA_CENTER[1], 2);
       expect(result.displayName).toContain('Dhaka City Center');
       expect(result.confidence).toBe(0.2);
       expect(result.isFallback).toBe(true);

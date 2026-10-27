@@ -8,6 +8,24 @@ export interface DhakaRoute {
 }
 
 /**
+ * Default Route: Mohakhali - Banani Real Road Path
+ * Traced using real road path coordinates provided for GariKoi.
+ */
+export const ROUTE_MOHAKHALI_BANANI: DhakaRoute = {
+  id: 'route-mohakali-banani',
+  name: 'Mohakhali - Banani Road Link',
+  description: 'Mohakhali to Banani real road path',
+  waypoints: [
+    [23.782884294034634, 90.39856046054382],
+    [23.780940365992127, 90.40143578849505],
+    [23.78101890910272, 90.39868920657149],
+    [23.779506945856063, 90.3979274592268],
+    [23.780125478386335, 90.39674728730652],
+    [23.77786732951554, 90.39632886271662],
+  ],
+};
+
+/**
  * Route A: Gulshan 2 -> Banani -> Mohakhali
  */
 export const ROUTE_A: DhakaRoute = {
@@ -75,7 +93,13 @@ export const ROUTE_D: DhakaRoute = {
   ],
 };
 
-export const DHAKA_ROUTES: DhakaRoute[] = [ROUTE_A, ROUTE_B, ROUTE_C, ROUTE_D];
+export const DHAKA_ROUTES: DhakaRoute[] = [
+  ROUTE_MOHAKHALI_BANANI,
+  ROUTE_A,
+  ROUTE_B,
+  ROUTE_C,
+  ROUTE_D,
+];
 
 /**
  * Finds the nearest Dhaka route to a given coordinate point.

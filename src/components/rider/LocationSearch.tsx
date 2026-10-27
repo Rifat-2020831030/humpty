@@ -2,13 +2,6 @@
 
 import React from 'react';
 
-export interface LocationSuggestion {
-  displayName: string;
-  lat: number;
-  lng: number;
-  address?: string;
-}
-
 export interface LocationSearchProps {
   pickupText: string;
   dropoffText: string;
@@ -16,11 +9,12 @@ export interface LocationSearchProps {
   onDropoffChange: (val: string) => void;
   onUseGPS: () => void;
   onSelectManually: () => void;
+  onSelectDropoffManually?: () => void;
   aiMode: boolean;
   onToggleAI: () => void;
   onSubmitSearch?: () => void;
-  onSelectSuggestion?: (item: LocationSuggestion) => void;
-  suggestions?: LocationSuggestion[];
+  onSelectSuggestion?: (item: any) => void;
+  suggestions?: any[];
   error?: string | null;
   isLoading?: boolean;
   onClearError?: () => void;
@@ -34,6 +28,7 @@ export function LocationSearch({
   onDropoffChange,
   onUseGPS,
   onSelectManually,
+  onSelectDropoffManually,
   aiMode,
   onToggleAI,
   onSubmitSearch,
@@ -52,11 +47,15 @@ export function LocationSearch({
   };
 
   return (
-    <div className={`w-full bg-neutral-950 border border-neutral-800 rounded-2xl p-4 text-white shadow-xl ${className}`}>
+    <div
+      className={`w-full bg-neutral-950 border border-neutral-800 rounded-2xl p-4 text-white shadow-xl ${className}`}
+    >
       {/* Search Header / Mode Indicator */}
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-800/80">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm tracking-wide text-neutral-200">Trip Locations</span>
+          <span className="font-semibold text-sm tracking-wide text-neutral-200">
+            Trip Locations
+          </span>
           <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400">
             Dhaka City
           </span>
@@ -118,7 +117,7 @@ export function LocationSearch({
             />
           </div>
 
-          {/* Explicit GPS and Manual Pin Selection Buttons */}
+          {/* Explicit GPS and Manual Pin Selection Buttons for Pickup */}
           <div className="flex items-center gap-2 pt-0.5">
             <button
               type="button"
@@ -163,6 +162,18 @@ export function LocationSearch({
               }`}
             />
           </div>
+
+          {/* Manual Pin Selection Button for Destination */}
+          <div className="flex justify-end pt-0.5">
+            <button
+              type="button"
+              onClick={onSelectDropoffManually || onSelectManually}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white transition-colors"
+            >
+              <span>🗺</span>
+              <span>Pin Destination on Map</span>
+            </button>
+          </div>
         </div>
 
         {/* Suggestions List */}
@@ -177,9 +188,13 @@ export function LocationSearch({
               >
                 <div className="flex items-center gap-2 truncate">
                   <span className="text-neutral-500">📍</span>
-                  <span className="text-neutral-200 font-medium truncate">{item.displayName}</span>
+                  <span className="text-neutral-200 font-medium truncate">
+                    {item.displayName}
+                  </span>
                 </div>
-                <span className="text-[11px] text-neutral-500 flex-shrink-0">Dhaka</span>
+                <span className="text-[11px] text-neutral-500 flex-shrink-0">
+                  Dhaka
+                </span>
               </button>
             ))}
           </div>

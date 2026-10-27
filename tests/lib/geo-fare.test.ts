@@ -80,7 +80,8 @@ describe('Geo & Fare Utilities', () => {
   });
 
   it('exports Dhaka default center, map style, and seed drivers', () => {
-    expect(DHAKA_CENTER).toEqual([23.8103, 90.4125]);
+    expect(DHAKA_CENTER[0]).toBeCloseTo(23.7810, 3);
+    expect(DHAKA_CENTER[1]).toBeCloseTo(90.3986, 3);
     expect(MAP_STYLE_URL).toContain('openfreemap');
     expect(SEED_DRIVERS.length).toBe(5);
     expect(SEED_DRIVERS[0].name).toBe('Rahim Uddin');

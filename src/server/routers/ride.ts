@@ -79,7 +79,149 @@ export const rideRouter = router({
       };
       eventBus.emit('incomingRide', incomingPayload);
 
+      // Auto-resolve search to a nearby driver after 5 seconds if not accepted manually
+      if (process.env.NODE_ENV !== 'test') {
+        setTimeout(async () => {
+          try {
+            const currentRide = await database.ride.findUnique({
+              where: { id: ride.id },
+            });
+            if (currentRide && currentRide.status === 'SEARCHING') {
+              const matchedDriver =
+                SEED_DRIVERS.find((d) => d.vehicleType === currentRide.vehicleType) ||
+                SEED_DRIVERS[0];
+
+              const updatedRide = await database.ride.update({
+                where: { id: ride.id },
+                data: {
+                  status: 'DRIVER_ASSIGNED',
+                  driverSessionId: matchedDriver.id,
+                  driverName: matchedDriver.name,
+                  driverVehicle: matchedDriver.vehicle,
+                  driverPlate: matchedDriver.plate,
+                  driverRating: matchedDriver.rating,
+                },
+              });
+
+              const assignedPayload: StatusChangePayload = {
+                rideId: ride.id,
+                status: 'DRIVER_ASSIGNED',
+                updatedAt: updatedRide.updatedAt,
+              };
+              eventBus.emit(`statusChange:${ride.id}`, assignedPayload);
+              eventBus.emit('statusChange', assignedPayload);
+
+              // Advance to DRIVER_EN_ROUTE and start simulation path after 1.5s
+              setTimeout(async () => {
+                try {
+                  const checkRide = await database.ride.findUnique({
+                    where: { id: ride.id },
+                  });
+                  if (checkRide && checkRide.status === 'DRIVER_ASSIGNED') {
+                    await database.ride.update({
+                      where: { id: ride.id },
+                      data: { status: 'DRIVER_EN_ROUTE' },
+                    });
+
+                    const enRoutePayload: StatusChangePayload = {
+                      rideId: ride.id,
+                      status: 'DRIVER_EN_ROUTE',
+                      updatedAt: new Date(),
+                    };
+                    eventBus.emit(`statusChange:${ride.id}`, enRoutePayload);
+                    eventBus.emit('statusChange', enRoutePayload);
+
+                    startDriverSimulation(
+                      ride.id,
+                      [matchedDriver.lat, matchedDriver.lng],
+                      [checkRide.pickupLat, checkRide.pickupLng],
+                      [checkRide.dropoffLat, checkRide.dropoffLng]
+                    );
+                  }
+                } catch (err) {
+                  console.error('Auto-advance to DRIVER_EN_ROUTE error:', err);
+                }
+              }, 1500);
+            }
+          } catch (err) {
+            console.error('Auto-resolve driver assignment error:', err);
+          }
+        }, 5000);
+      }
+
       return ride;
+    }),
+
+  autoAssign: publicProcedure
+    .input(
+      z.object({
+        rideId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const database = getDb(ctx);
+      const ride = await database.ride.findUnique({ where: { id: input.rideId } });
+      if (!ride) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Ride not found' });
+      }
+
+      if (ride.status !== 'SEARCHING') {
+        return ride;
+      }
+
+      const matchedDriver =
+        SEED_DRIVERS.find((d) => d.vehicleType === ride.vehicleType) || SEED_DRIVERS[0];
+
+      const updatedRide = await database.ride.update({
+        where: { id: input.rideId },
+        data: {
+          status: 'DRIVER_ASSIGNED',
+          driverSessionId: matchedDriver.id,
+          driverName: matchedDriver.name,
+          driverVehicle: matchedDriver.vehicle,
+          driverPlate: matchedDriver.plate,
+          driverRating: matchedDriver.rating,
+        },
+      });
+
+      const assignedPayload: StatusChangePayload = {
+        rideId: ride.id,
+        status: 'DRIVER_ASSIGNED',
+        updatedAt: updatedRide.updatedAt,
+      };
+      eventBus.emit(`statusChange:${ride.id}`, assignedPayload);
+      eventBus.emit('statusChange', assignedPayload);
+
+      setTimeout(async () => {
+        try {
+          const checkRide = await database.ride.findUnique({ where: { id: input.rideId } });
+          if (checkRide && checkRide.status === 'DRIVER_ASSIGNED') {
+            await database.ride.update({
+              where: { id: input.rideId },
+              data: { status: 'DRIVER_EN_ROUTE' },
+            });
+
+            const enRoutePayload: StatusChangePayload = {
+              rideId: input.rideId,
+              status: 'DRIVER_EN_ROUTE',
+              updatedAt: new Date(),
+            };
+            eventBus.emit(`statusChange:${input.rideId}`, enRoutePayload);
+            eventBus.emit('statusChange', enRoutePayload);
+
+            startDriverSimulation(
+              input.rideId,
+              [matchedDriver.lat, matchedDriver.lng],
+              [checkRide.pickupLat, checkRide.pickupLng],
+              [checkRide.dropoffLat, checkRide.dropoffLng]
+            );
+          }
+        } catch (e) {
+          console.error('Error auto-starting driver simulation in autoAssign:', e);
+        }
+      }, 1500);
+
+      return updatedRide;
     }),
 
   accept: publicProcedure

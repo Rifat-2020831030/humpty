@@ -19,6 +19,9 @@ export interface MapBaseProps {
   interactive?: boolean;
   onMapClick?: (coords: { lat: number; lng: number }) => void;
   onMapLoad?: (map: maplibregl.Map) => void;
+  onMapMove?: (coords: { lat: number; lng: number }) => void;
+  onMapMoveStart?: () => void;
+  onMapMoveEnd?: (coords: { lat: number; lng: number }) => void;
   styleUrl?: string;
   className?: string;
   children?: React.ReactNode;
@@ -91,6 +94,9 @@ export function MapBase({
   interactive = true,
   onMapClick,
   onMapLoad,
+  onMapMove,
+  onMapMoveStart,
+  onMapMoveEnd,
   styleUrl = MAP_STYLE_URL,
   className = 'w-full h-full min-h-[300px]',
   children,
@@ -107,6 +113,15 @@ export function MapBase({
 
   const onMapLoadRef = useRef(onMapLoad);
   onMapLoadRef.current = onMapLoad;
+
+  const onMapMoveRef = useRef(onMapMove);
+  onMapMoveRef.current = onMapMove;
+
+  const onMapMoveStartRef = useRef(onMapMoveStart);
+  onMapMoveStartRef.current = onMapMoveStart;
+
+  const onMapMoveEndRef = useRef(onMapMoveEnd);
+  onMapMoveEndRef.current = onMapMoveEnd;
 
   /**
    * Projects a Dhaka [lat, lng] or {lat, lng} into a 0-100% percentage coordinate for 2D mode
@@ -137,6 +152,12 @@ export function MapBase({
     const lat = maxLat - Math.max(0, Math.min(1, ratioY)) * (maxLat - minLat);
     if (onMapClickRef.current) {
       onMapClickRef.current({ lat, lng });
+    }
+    if (onMapMoveRef.current) {
+      onMapMoveRef.current({ lat, lng });
+    }
+    if (onMapMoveEndRef.current) {
+      onMapMoveEndRef.current({ lat, lng });
     }
   };
 
@@ -190,6 +211,28 @@ export function MapBase({
       map.on('click', (e) => {
         if (onMapClickRef.current) {
           onMapClickRef.current({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        }
+      });
+
+      const activeMap = map;
+
+      activeMap.on('movestart', () => {
+        if (onMapMoveStartRef.current) {
+          onMapMoveStartRef.current();
+        }
+      });
+
+      activeMap.on('move', () => {
+        if (onMapMoveRef.current) {
+          const c = activeMap.getCenter();
+          onMapMoveRef.current({ lat: c.lat, lng: c.lng });
+        }
+      });
+
+      activeMap.on('moveend', () => {
+        if (onMapMoveEndRef.current) {
+          const c = activeMap.getCenter();
+          onMapMoveEndRef.current({ lat: c.lat, lng: c.lng });
         }
       });
 

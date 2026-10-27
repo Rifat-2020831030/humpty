@@ -26,10 +26,18 @@ import {
 } from '../../components/map';
 import { TRPCProvider } from '../../trpc/Provider';
 
-type RiderFlowStep = 'HOME' | 'LOCATION_SEARCH' | 'FARE_SELECT' | 'RATING_SCREEN';
+export type RiderFlowStep =
+  | 'HOME'
+  | 'LOCATION_SEARCH'
+  | 'FARE_SELECT'
+  | 'MANUAL_PIN_PICKER'
+  | 'SEARCHING'
+  | 'RATING_SCREEN';
 
 function RiderContent() {
   const { sessionId, role, setRole } = useSession();
+  const utils = trpc.useUtils();
+
   const {
     location: userLocation,
     mode: locationMode,
@@ -41,7 +49,7 @@ function RiderContent() {
     initialLocation: {
       lat: DHAKA_CENTER[0],
       lng: DHAKA_CENTER[1],
-      displayName: 'Dhaka City Center',
+      displayName: 'Banani / Mohakhali, Dhaka',
     },
   });
 
@@ -52,7 +60,7 @@ function RiderContent() {
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
 
   // Search Inputs
-  const [pickupText, setPickupText] = useState<string>('Dhaka City Center');
+  const [pickupText, setPickupText] = useState<string>('Banani / Mohakhali, Dhaka');
   const [dropoffText, setDropoffText] = useState<string>('');
   const [aiMode, setAiMode] = useState<boolean>(false);
   const [pickupCoord, setPickupCoord] = useState<{ lat: number; lng: number }>({
@@ -61,6 +69,17 @@ function RiderContent() {
   });
   const [dropoffCoord, setDropoffCoord] = useState<{ lat: number; lng: number } | null>(null);
   const [isSearchingLocation, setIsSearchingLocation] = useState<boolean>(false);
+
+  // Manual Center Pin Picker State
+  const [pinPickerTarget, setPinPickerTarget] = useState<'pickup' | 'dropoff'>('pickup');
+  const [centerPinCoord, setCenterPinCoord] = useState<{ lat: number; lng: number }>({
+    lat: DHAKA_CENTER[0],
+    lng: DHAKA_CENTER[1],
+  });
+  const [isMapMoving, setIsMapMoving] = useState<boolean>(false);
+
+  // Confirming / Dispatching loading state
+  const [isConfirmingRide, setIsConfirmingRide] = useState<boolean>(false);
 
   // Active Ride & Driver tracking
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
@@ -76,7 +95,7 @@ function RiderContent() {
     { sessionId },
     {
       enabled: Boolean(sessionId),
-      refetchInterval: activeRideId ? 4000 : false,
+      refetchInterval: activeRideId ? 3000 : false,
     }
   );
 
@@ -86,6 +105,7 @@ function RiderContent() {
   const submitRatingMutation = trpc.ride.submitRating.useMutation();
   const aiSearchMutation = trpc.location.aiSearch.useMutation();
   const sendMessageMutation = trpc.chat.sendMessage.useMutation();
+  const autoAssignMutation = trpc.ride.autoAssign.useMutation();
 
   // Chat messages query
   const chatMessagesQuery = trpc.chat.getMessages.useQuery(
@@ -100,7 +120,7 @@ function RiderContent() {
     }
   }, [role, setRole]);
 
-  // Sync active ride from query
+  // Sync active ride from query safely
   useEffect(() => {
     if (activeRideQuery.data) {
       setActiveRideId(activeRideQuery.data.id);
@@ -108,13 +128,26 @@ function RiderContent() {
       if (activeRideQuery.data.vehicleType) {
         setSelectedVehicle(activeRideQuery.data.vehicleType as VehicleType);
       }
-    } else if (activeRideQuery.isFetched && !activeRideQuery.data && activeRideId) {
-      if (rideStatus !== 'COMPLETED' && rideStatus !== 'RATED') {
-        setActiveRideId(null);
-        setRideStatus(null);
-      }
     }
-  }, [activeRideQuery.data, activeRideQuery.isFetched, activeRideId, rideStatus]);
+  }, [activeRideQuery.data]);
+
+  // Auto-resolve search to a driver after 5 seconds
+  useEffect(() => {
+    if (rideStatus === 'SEARCHING' && activeRideId) {
+      const timer = setTimeout(() => {
+        autoAssignMutation.mutate(
+          { rideId: activeRideId },
+          {
+            onSuccess(updated) {
+              setRideStatus(updated.status as RideStatus);
+              utils.ride.getActive.setData({ sessionId }, updated);
+            },
+          }
+        );
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [rideStatus, activeRideId]);
 
   // Sync user location to pickup text when GPS / manual changes
   useEffect(() => {
@@ -144,21 +177,36 @@ function RiderContent() {
     {
       enabled: Boolean(activeRideId),
       onData(data) {
-        if (typeof data.lat === 'number' && typeof data.lng === 'number') {
-          setDriverCoord({
-            lat: data.lat,
-            lng: data.lng,
-            bearing: data.bearing ?? 0,
-          });
-        }
+        setDriverCoord({
+          lat: data.lat,
+          lng: data.lng,
+          bearing: data.bearing,
+        });
       },
     }
   );
 
-  // Calculated distance between pickup and dropoff
+  // Matched Driver Details
+  const matchedDriver = useMemo(() => {
+    const defaultDriver = SEED_DRIVERS.find((d) => d.vehicleType === selectedVehicle) || SEED_DRIVERS[0];
+    const activeDriverName = activeRideQuery.data?.driverName;
+    const activeDriverVehicle = activeRideQuery.data?.driverVehicle;
+    const activeDriverPlate = activeRideQuery.data?.driverPlate;
+    const activeDriverRating = activeRideQuery.data?.driverRating;
+
+    return {
+      name: activeDriverName || defaultDriver.name,
+      vehicle: activeDriverVehicle || defaultDriver.vehicle,
+      plate: activeDriverPlate || defaultDriver.plate,
+      rating: activeDriverRating || defaultDriver.rating,
+      phone: defaultDriver.phone,
+    };
+  }, [activeRideQuery.data, selectedVehicle]);
+
+  // Calculate Distance & Fare
   const routeDistanceKm = useMemo(() => {
     if (!pickupCoord || !dropoffCoord) {
-      return 6.5; // Default Dhaka average distance
+      return 2.5;
     }
     const dist = calculateDistance(
       pickupCoord.lat,
@@ -166,63 +214,59 @@ function RiderContent() {
       dropoffCoord.lat,
       dropoffCoord.lng
     );
-    return Math.max(0.8, Math.round(dist * 10) / 10);
+    return Math.max(0.5, Math.round(dist * 10) / 10);
   }, [pickupCoord, dropoffCoord]);
 
-  // Handle Promo Application
-  const handleApplyPromo = (code: string) => {
-    setPromoCode(code);
-    if (code === 'DHAKA20') {
-      setPromoDiscount(25);
-    } else if (code === 'GARIKOI30') {
-      setPromoDiscount(30);
-    } else {
-      setPromoDiscount(20);
-    }
-  };
+  const fareBreakdown = useMemo(() => {
+    return calculateFare(selectedVehicle, routeDistanceKm);
+  }, [selectedVehicle, routeDistanceKm]);
 
-  // Handle Search Submission
+  // Handle Location Search Submission
   const handleSubmitLocationSearch = async () => {
     if (!dropoffText.trim()) return;
-
     setIsSearchingLocation(true);
+
     try {
+      let matchedCoord: { lat: number; lng: number } = { lat: 23.7828, lng: 90.3985 };
+
       if (aiMode) {
-        const result = await aiSearchMutation.mutateAsync({
+        const aiResult = await aiSearchMutation.mutateAsync({
           query: dropoffText,
           contextLat: pickupCoord.lat,
           contextLng: pickupCoord.lng,
         });
-
-        if (result && typeof result.lat === 'number' && typeof result.lng === 'number') {
-          setDropoffCoord({ lat: result.lat, lng: result.lng });
-          setDropoffText(result.displayName || dropoffText);
-          setCurrentStep('FARE_SELECT');
-          return;
+        if (aiResult && aiResult.lat && aiResult.lng) {
+          matchedCoord = { lat: aiResult.lat, lng: aiResult.lng };
+          if (aiResult.displayName) {
+            setDropoffText(aiResult.displayName);
+          }
         }
-      }
-
-      // Default Dhaka landmarks fallback / resolution
-      const queryLower = dropoffText.toLowerCase();
-      let matchedCoord = { lat: 23.7925, lng: 90.4078 }; // Gulshan 2 default
-
-      if (queryLower.includes('dhanmondi')) {
-        matchedCoord = { lat: 23.7461, lng: 90.3742 };
-      } else if (queryLower.includes('motijheel')) {
-        matchedCoord = { lat: 23.733, lng: 90.4172 };
-      } else if (queryLower.includes('uttara')) {
-        matchedCoord = { lat: 23.8759, lng: 90.3795 };
-      } else if (queryLower.includes('banani')) {
-        matchedCoord = { lat: 23.7938, lng: 90.4043 };
-      } else if (queryLower.includes('airport')) {
-        matchedCoord = { lat: 23.8433, lng: 90.4042 };
+      } else {
+        const queryLower = dropoffText.toLowerCase();
+        if (queryLower.includes('gulshan')) {
+          matchedCoord = { lat: 23.7925, lng: 90.4078 };
+        } else if (queryLower.includes('banani')) {
+          matchedCoord = { lat: 23.7940, lng: 90.4043 };
+        } else if (queryLower.includes('dhanmondi')) {
+          matchedCoord = { lat: 23.7534, lng: 90.3773 };
+        } else if (queryLower.includes('motijheel')) {
+          matchedCoord = { lat: 23.7330, lng: 90.4172 };
+        } else if (queryLower.includes('uttara') || queryLower.includes('airport')) {
+          matchedCoord = { lat: 23.8433, lng: 90.4030 };
+        } else if (queryLower.includes('mirpur')) {
+          matchedCoord = { lat: 23.8070, lng: 90.3680 };
+        } else {
+          matchedCoord = {
+            lat: pickupCoord.lat + 0.015,
+            lng: pickupCoord.lng + 0.012,
+          };
+        }
       }
 
       setDropoffCoord(matchedCoord);
       setCurrentStep('FARE_SELECT');
     } catch (err) {
       console.error('Error resolving location:', err);
-      // Fallback coordinate
       setDropoffCoord({ lat: 23.7925, lng: 90.4078 });
       setCurrentStep('FARE_SELECT');
     } finally {
@@ -230,27 +274,56 @@ function RiderContent() {
     }
   };
 
+  // Open Manual Center Pin Picker
+  const handleOpenManualPinPicker = (target: 'pickup' | 'dropoff') => {
+    setPinPickerTarget(target);
+    const initial = target === 'pickup' ? pickupCoord : (dropoffCoord || pickupCoord);
+    setCenterPinCoord(initial);
+    setCurrentStep('MANUAL_PIN_PICKER');
+  };
+
+  // Confirm Manual Pin Point
+  const handleConfirmManualPin = () => {
+    if (pinPickerTarget === 'pickup') {
+      setPickupCoord(centerPinCoord);
+      setPickupText(`Manual Pin (${centerPinCoord.lat.toFixed(4)}, ${centerPinCoord.lng.toFixed(4)})`);
+      setManualPin(centerPinCoord.lat, centerPinCoord.lng);
+      setCurrentStep('LOCATION_SEARCH');
+    } else {
+      setDropoffCoord(centerPinCoord);
+      setDropoffText(`Manual Pin (${centerPinCoord.lat.toFixed(4)}, ${centerPinCoord.lng.toFixed(4)})`);
+      setCurrentStep('FARE_SELECT');
+    }
+  };
+
   // Handle Ride Booking Request
   const handleConfirmRide = async () => {
     if (!pickupCoord || !dropoffCoord) return;
+    setIsConfirmingRide(true);
 
     try {
       const ride = await requestMutation.mutateAsync({
         vehicleType: selectedVehicle,
         pickupLat: pickupCoord.lat,
         pickupLng: pickupCoord.lng,
-        pickupAddress: pickupText || 'Pickup Location',
+        pickupAddress: pickupText || 'Banani / Mohakhali, Dhaka',
         dropoffLat: dropoffCoord.lat,
         dropoffLng: dropoffCoord.lng,
-        dropoffAddress: dropoffText || 'Destination',
+        dropoffAddress: dropoffText || 'Dhaka Destination',
         riderSessionId: sessionId,
       });
 
       setActiveRideId(ride.id);
       setRideStatus('SEARCHING');
-      setCurrentStep('HOME');
+      utils.ride.getActive.setData({ sessionId }, ride);
+
+      // Brief transition delay so user perceives the dispatching confirmation
+      await new Promise((r) => setTimeout(r, 600));
+      setCurrentStep('SEARCHING');
     } catch (err) {
       console.error('Failed to request ride:', err);
+    } finally {
+      setIsConfirmingRide(false);
     }
   };
 
@@ -262,6 +335,7 @@ function RiderContent() {
       setActiveRideId(null);
       setRideStatus(null);
       setCurrentStep('HOME');
+      utils.ride.getActive.setData({ sessionId }, null);
     } catch (err) {
       console.error('Failed to cancel ride:', err);
     }
@@ -279,122 +353,238 @@ function RiderContent() {
       setActiveRideId(null);
       setRideStatus(null);
       setCurrentStep('HOME');
+      utils.ride.getActive.setData({ sessionId }, null);
     } catch (err) {
       console.error('Failed to submit rating:', err);
-      setActiveRideId(null);
-      setRideStatus(null);
-      setCurrentStep('HOME');
     }
   };
 
-  // Handle Send Chat
-  const handleSendChat = async (e: React.FormEvent) => {
+  // Promo Code Application
+  const handleApplyPromo = (code: string) => {
+    const upper = code.trim().toUpperCase();
+    if (upper === 'DHAKA20') {
+      setPromoCode('DHAKA20');
+      setPromoDiscount(20);
+    } else if (upper === 'GARIKOI30') {
+      setPromoCode('GARIKOI30');
+      setPromoDiscount(30);
+    }
+  };
+
+  // Chat message submission
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatMessageText.trim() || !activeRideId) return;
 
     try {
       await sendMessageMutation.mutateAsync({
         rideId: activeRideId,
-        text: chatMessageText.trim(),
         senderRole: 'RIDER',
+        text: chatMessageText.trim(),
       });
       setChatMessageText('');
-      chatMessagesQuery.refetch();
     } catch (err) {
       console.error('Failed to send message:', err);
     }
   };
 
-  // Matched Driver profile
-  const matchedDriver = useMemo(() => {
-    if (!activeRideQuery.data) return SEED_DRIVERS[0];
-    return {
-      name: activeRideQuery.data.driverName || 'Rahim Uddin',
-      plate: activeRideQuery.data.driverPlate || 'DHA-1234',
-      vehicle: activeRideQuery.data.driverVehicle || 'Dhaka Transport',
-      rating: activeRideQuery.data.driverRating || 4.9,
-    };
-  }, [activeRideQuery.data]);
-
-  // Fare breakdown calculation
-  const fareBreakdown = useMemo(() => {
-    return calculateFare(selectedVehicle, routeDistanceKm);
-  }, [selectedVehicle, routeDistanceKm]);
-
-  // Determine current active view
-  const isTripActive =
-    rideStatus === 'DRIVER_ASSIGNED' ||
-    rideStatus === 'DRIVER_EN_ROUTE' ||
-    rideStatus === 'ARRIVED_AT_PICKUP' ||
-    rideStatus === 'IN_PROGRESS';
+  const isTripActive = Boolean(
+    rideStatus &&
+    ['DRIVER_ASSIGNED', 'DRIVER_EN_ROUTE', 'ARRIVED_AT_PICKUP'].includes(rideStatus)
+  );
 
   return (
     <main className="relative w-full h-screen overflow-hidden bg-black text-white flex flex-col font-sans select-none">
       {/* Central Interactive Map Area */}
       <div className="absolute inset-0 z-0">
         <MapBase
-          center={[pickupCoord.lat, pickupCoord.lng]}
-          zoom={13}
+          center={
+            currentStep === 'MANUAL_PIN_PICKER'
+              ? [centerPinCoord.lat, centerPinCoord.lng]
+              : [pickupCoord.lat, pickupCoord.lng]
+          }
+          zoom={14}
+          onMapMove={(c) => {
+            if (currentStep === 'MANUAL_PIN_PICKER') {
+              setCenterPinCoord(c);
+            }
+          }}
+          onMapMoveStart={() => {
+            if (currentStep === 'MANUAL_PIN_PICKER') {
+              setIsMapMoving(true);
+            }
+          }}
+          onMapMoveEnd={(c) => {
+            if (currentStep === 'MANUAL_PIN_PICKER') {
+              setCenterPinCoord(c);
+              setIsMapMoving(false);
+            }
+          }}
           className="w-full h-full"
         >
-          {/* Pickup Marker */}
-          <LocationPicker
-            currentPin={pickupCoord}
-            label="Pickup"
-            onPinChange={(pos: { lat: number; lng: number }) => {
-              setPickupCoord({ lat: pos.lat, lng: pos.lng });
-              setManualPin(pos.lat, pos.lng);
-            }}
-          />
-
-          {/* Dropoff Marker if selected */}
-          {dropoffCoord && (
-            <LocationPicker
-              currentPin={dropoffCoord}
-              label="Dropoff"
-            />
-          )}
-
-          {/* Route Layer when both pickup and dropoff exist */}
-          {dropoffCoord && (
-            <RouteLayer
-              coordinates={[
-                [pickupCoord.lat, pickupCoord.lng],
-                [
-                  (pickupCoord.lat + dropoffCoord.lat) / 2 + 0.003,
-                  (pickupCoord.lng + dropoffCoord.lng) / 2 + 0.002,
-                ],
-                [dropoffCoord.lat, dropoffCoord.lng],
-              ]}
-              color="#006a4e"
-              width={5}
-            />
-          )}
-
-          {/* Driver Marker during active ride or seed drivers on Home */}
-          {isTripActive && driverCoord ? (
-            <DriverMarker
-              position={[driverCoord.lat, driverCoord.lng]}
-              bearing={driverCoord.bearing || 0}
-              vehicleType={selectedVehicle}
-            />
-          ) : (
-            SEED_DRIVERS.map((d) => (
-              <DriverMarker
-                key={d.id}
-                id={d.id}
-                position={[d.lat, d.lng]}
-                vehicleType={d.vehicleType}
+          {/* Normal Mode Map Layers (hidden during Center-Pin manual picker mode) */}
+          {currentStep !== 'MANUAL_PIN_PICKER' && (
+            <>
+              {/* Pickup Marker */}
+              <LocationPicker
+                currentPin={pickupCoord}
+                label="Pickup"
+                onPinChange={(pos: { lat: number; lng: number }) => {
+                  setPickupCoord({ lat: pos.lat, lng: pos.lng });
+                  setManualPin(pos.lat, pos.lng);
+                }}
               />
-            ))
+
+              {/* Dropoff Marker if selected */}
+              {dropoffCoord && (
+                <LocationPicker
+                  currentPin={dropoffCoord}
+                  label="Dropoff"
+                />
+              )}
+
+              {/* Route Layer when both pickup and dropoff exist */}
+              {dropoffCoord && (
+                <RouteLayer
+                  coordinates={[
+                    [pickupCoord.lat, pickupCoord.lng],
+                    [
+                      (pickupCoord.lat + dropoffCoord.lat) / 2 + 0.003,
+                      (pickupCoord.lng + dropoffCoord.lng) / 2 + 0.002,
+                    ],
+                    [dropoffCoord.lat, dropoffCoord.lng],
+                  ]}
+                  color="#006a4e"
+                  width={5}
+                />
+              )}
+
+              {/* Driver Marker during active ride or seed drivers on Home */}
+              {isTripActive && driverCoord ? (
+                <DriverMarker
+                  position={[driverCoord.lat, driverCoord.lng]}
+                  bearing={driverCoord.bearing || 0}
+                  vehicleType={selectedVehicle}
+                />
+              ) : (
+                SEED_DRIVERS.map((d) => (
+                  <DriverMarker
+                    key={d.id}
+                    id={d.id}
+                    position={[d.lat, d.lng]}
+                    vehicleType={d.vehicleType}
+                  />
+                ))
+              )}
+            </>
           )}
         </MapBase>
       </div>
 
+      {/* Dead-Center Static Pin for Manual Pin Picker Mode */}
+      {currentStep === 'MANUAL_PIN_PICKER' && (
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-full pointer-events-none z-30 flex flex-col items-center">
+          {/* Badge Tooltip */}
+          <div
+            className={`px-3 py-1 mb-1.5 bg-neutral-950/95 border border-emerald-500 rounded-full text-xs font-semibold text-emerald-400 shadow-2xl backdrop-blur-md transition-all duration-200 ${
+              isMapMoving ? '-translate-y-2 scale-105' : 'translate-y-0 scale-100'
+            }`}
+          >
+            {pinPickerTarget === 'pickup' ? '📍 Set Pickup Point' : '🎯 Set Destination'}
+          </div>
+
+          {/* Elevated Pin Icon with smooth lift animation on map move */}
+          <div
+            className={`transition-all duration-200 ease-out origin-bottom ${
+              isMapMoving ? '-translate-y-3 scale-110' : 'translate-y-0 scale-100'
+            }`}
+          >
+            <div className="w-10 h-10 rounded-full bg-emerald-600 border-2 border-white shadow-2xl flex items-center justify-center text-white">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+            </div>
+            <div className="w-2.5 h-2.5 -mt-1 mx-auto rotate-45 bg-emerald-600 border-r-2 border-b-2 border-white" />
+          </div>
+
+          {/* Ground Shadow */}
+          <div
+            className={`w-4 h-1.5 rounded-full bg-black/50 blur-[1px] transition-all duration-200 ${
+              isMapMoving ? 'scale-75 opacity-30 mt-3' : 'scale-100 opacity-70 mt-1'
+            }`}
+          />
+        </div>
+      )}
+
       {/* Main Overlay State Machine */}
       <div className="relative z-20 h-full flex-1 flex flex-col justify-between pointer-events-none p-3 max-w-md mx-auto w-full">
-        {/* Step: RATING SCREEN */}
-        {rideStatus === 'RATED' || currentStep === 'RATING_SCREEN' ? (
+        {/* Step: MANUAL PIN PICKER CONFIRMATION CARD */}
+        {currentStep === 'MANUAL_PIN_PICKER' ? (
+          <div className="mt-auto pointer-events-auto">
+            <div className="bg-neutral-950/95 border border-neutral-800 rounded-3xl p-4 shadow-2xl backdrop-blur-md space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs uppercase font-mono tracking-wider text-emerald-400 font-bold">
+                    {pinPickerTarget === 'pickup' ? 'Pickup Location' : 'Destination'}
+                  </span>
+                  <p className="text-sm font-semibold text-white truncate max-w-xs">
+                    {pinPickerTarget === 'pickup' ? 'Banani / Mohakhali' : 'Dhaka Destination'}
+                  </p>
+                  <p className="text-[11px] font-mono text-neutral-400">
+                    {centerPinCoord.lat.toFixed(5)}, {centerPinCoord.lng.toFixed(5)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('LOCATION_SEARCH')}
+                  className="px-2.5 py-1.5 text-xs text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleConfirmManualPin}
+                className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <span>Confirm {pinPickerTarget === 'pickup' ? 'Pickup' : 'Destination'} Point</span>
+              </button>
+            </div>
+          </div>
+        ) : isConfirmingRide ? (
+          /* Step: CONFIRMING / DISPATCHING LOADING STATE */
+          <div className="my-auto pointer-events-auto">
+            <div className="bg-neutral-950/95 border border-neutral-800 rounded-3xl p-6 shadow-2xl backdrop-blur-md text-center space-y-4 max-w-sm mx-auto">
+              <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
+                <span className="w-16 h-16 rounded-full border-2 border-emerald-500/30 border-t-emerald-500 animate-spin absolute" />
+                <span className="w-4 h-4 rounded-full bg-emerald-500 animate-ping absolute" />
+                <span className="w-3 h-3 rounded-full bg-emerald-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Requesting Ride...</h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Connecting with nearby drivers in Banani / Mohakhali
+                </p>
+              </div>
+              <div className="px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs font-mono text-emerald-400 inline-block">
+                {selectedVehicle} • Est. Fare ৳{fareBreakdown.totalFare}
+              </div>
+            </div>
+          </div>
+        ) : rideStatus === 'RATED' || currentStep === 'RATING_SCREEN' ? (
+          /* Step: RATING SCREEN */
           <div className="my-auto pointer-events-auto">
             <RatingScreen
               driverName={matchedDriver.name}
@@ -448,12 +638,12 @@ function RiderContent() {
               onOpenChat={() => setIsChatOpen(true)}
             />
           </div>
-        ) : rideStatus === 'SEARCHING' ? (
+        ) : rideStatus === 'SEARCHING' || currentStep === 'SEARCHING' ? (
           /* Step: SEARCHING OVERLAY */
           <div className="my-auto pointer-events-auto">
             <SearchingOverlay
               pickupAddress={pickupText}
-              dropoffAddress={dropoffText}
+              dropoffAddress={dropoffText || 'Dhaka Destination'}
               vehicleType={selectedVehicle}
               onCancel={handleCancelRide}
             />
@@ -476,9 +666,9 @@ function RiderContent() {
               onSelectVehicle={setSelectedVehicle}
               onConfirm={handleConfirmRide}
               pickupAddress={pickupText}
-              dropoffAddress={dropoffText}
+              dropoffAddress={dropoffText || 'Dhaka Destination'}
               promoDiscount={promoDiscount}
-              isLoading={requestMutation.isPending}
+              isLoading={requestMutation.isPending || isConfirmingRide}
             />
           </div>
         ) : currentStep === 'LOCATION_SEARCH' ? (
@@ -499,10 +689,8 @@ function RiderContent() {
               onPickupChange={setPickupText}
               onDropoffChange={setDropoffText}
               onUseGPS={requestGPS}
-              onSelectManually={() => {
-                setManualPin(pickupCoord.lat, pickupCoord.lng);
-                setCurrentStep('HOME');
-              }}
+              onSelectManually={() => handleOpenManualPinPicker('pickup')}
+              onSelectDropoffManually={() => handleOpenManualPinPicker('dropoff')}
               aiMode={aiMode}
               onToggleAI={() => setAiMode(!aiMode)}
               onSubmitSearch={handleSubmitLocationSearch}
@@ -539,66 +727,75 @@ function RiderContent() {
               <button
                 type="button"
                 onClick={() => setIsChatOpen(false)}
-                className="p-1 text-neutral-400 hover:text-white text-sm"
+                className="text-neutral-400 hover:text-white text-sm px-2 py-1"
               >
                 ✕
               </button>
             </div>
 
-            {/* Message Thread */}
-            <div className="flex-1 overflow-y-auto py-3 space-y-2 min-h-[160px]">
-              {(chatMessagesQuery.data || []).map((msg) => {
-                const isMe = msg.senderRole === 'RIDER';
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[75%] px-3 py-2 rounded-xl text-xs ${
-                        isMe
-                          ? 'bg-emerald-600 text-white rounded-br-none'
-                          : 'bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-bl-none'
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                  </div>
-                );
-              })}
-              {(!chatMessagesQuery.data || chatMessagesQuery.data.length === 0) && (
-                <div className="text-center text-xs text-neutral-500 py-6">
-                  No messages yet. Send a note to your driver!
-                </div>
-              )}
-            </div>
-
-            {/* Quick replies & Input */}
-            <div className="flex gap-1.5 pb-2 overflow-x-auto text-[11px]">
-              {['I am waiting outside', 'Near the main gate', 'On my way down'].map((quick) => (
-                <button
-                  key={quick}
-                  type="button"
-                  onClick={() => setChatMessageText(quick)}
-                  className="px-2.5 py-1 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-full text-neutral-300 flex-shrink-0"
+            {/* Messages Scroll Area */}
+            <div className="flex-1 overflow-y-auto py-3 space-y-2 min-h-[160px] max-h-[300px]">
+              {(chatMessagesQuery.data || []).map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${
+                    msg.senderRole === 'RIDER' ? 'items-end' : 'items-start'
+                  }`}
                 >
-                  {quick}
-                </button>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
+                      msg.senderRole === 'RIDER'
+                        ? 'bg-emerald-600 text-white rounded-br-none'
+                        : 'bg-neutral-800 text-neutral-100 rounded-bl-none'
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                  <span className="text-[10px] text-neutral-500 mt-0.5 px-1 font-mono">
+                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
               ))}
             </div>
 
-            <form onSubmit={handleSendChat} className="flex gap-2 pt-1 border-t border-neutral-800">
+            {/* Quick Replies */}
+            <div className="flex gap-1.5 overflow-x-auto py-2 border-t border-neutral-800/80 no-scrollbar">
+              {['I am waiting here', 'Where are you?', 'Coming downstairs'].map(
+                (quick) => (
+                  <button
+                    key={quick}
+                    type="button"
+                    onClick={() => {
+                      sendMessageMutation.mutate({
+                        rideId: activeRideId,
+                        senderRole: 'RIDER',
+                        text: quick,
+                      });
+                    }}
+                    className="flex-shrink-0 px-2.5 py-1 bg-neutral-900 border border-neutral-700/80 rounded-full text-[11px] text-neutral-300 hover:border-emerald-500 transition-colors"
+                  >
+                    {quick}
+                  </button>
+                )
+              )}
+            </div>
+
+            {/* Input Bar */}
+            <form onSubmit={handleSendMessage} className="flex gap-2 pt-2 border-t border-neutral-800">
               <input
                 type="text"
                 value={chatMessageText}
                 onChange={(e) => setChatMessageText(e.target.value)}
-                placeholder="Type a message..."
-                className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                placeholder="Type a message to driver..."
+                className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500"
               />
               <button
                 type="submit"
                 disabled={!chatMessageText.trim() || sendMessageMutation.isPending}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-800 text-white font-semibold text-xs rounded-xl"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white text-xs font-semibold rounded-xl transition-colors"
               >
                 Send
               </button>
@@ -617,4 +814,3 @@ export default function RiderPage() {
     </TRPCProvider>
   );
 }
-
