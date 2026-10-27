@@ -52,8 +52,8 @@ describe('Map GeoJSON Utilities', () => {
     expect(collection.features.length).toBe(2);
     expect(collection.features[0].geometry.type).toBe('Point');
     expect(collection.features[0].geometry.coordinates).toEqual([90.41, 23.81]);
-    expect(collection.features[0].properties.intensity).toBe(3);
-    expect(collection.features[1].properties.intensity).toBe(5);
+    expect(collection.features[0].properties?.intensity).toBe(3);
+    expect(collection.features[1].properties?.intensity).toBe(5);
   });
 
   it('toLngLat converts lat/lng to [lng, lat]', () => {
@@ -109,3 +109,4 @@ describe('Map Component Exports & SSR Safety', () => {
     expect(typeof useMap).toBe('function');
   });
 });
+
