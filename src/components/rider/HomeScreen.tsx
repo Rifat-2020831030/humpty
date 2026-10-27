@@ -16,6 +16,7 @@ import { VehicleType } from '../../types';
 import { SEED_DRIVERS } from '../../lib/constants';
 import ServiceTiles from './ServiceTiles';
 import OffersStrip from './OffersStrip';
+import RiderBottomNav from './RiderBottomNav';
 
 export interface HomeScreenProps {
   selectedVehicle: VehicleType;
@@ -244,52 +245,8 @@ export function HomeScreen({
         {children}
       </main>
 
-      {/* Bottom Sticky Navigation Panel (Pathao Style) */}
-      <nav className="sticky bottom-0 z-30 px-3 py-2 bg-neutral-950/95 backdrop-blur-md border-t border-neutral-850 flex items-center justify-around max-w-md mx-auto w-full">
-        <button
-          type="button"
-          onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-colors ${
-            activeTab === 'home' ? 'text-emerald-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <HomeIcon className="w-4 h-4" />
-          <span className="text-[10px]">Home</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('rides')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-colors ${
-            activeTab === 'rides' ? 'text-emerald-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span className="text-[10px]">Activity</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('offers')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-colors ${
-            activeTab === 'offers' ? 'text-emerald-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <Tag className="w-4 h-4" />
-          <span className="text-[10px]">Offers</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-colors ${
-            activeTab === 'profile' ? 'text-emerald-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <User className="w-4 h-4" />
-          <span className="text-[10px]">Profile</span>
-        </button>
-      </nav>
+      {/* Bottom Sticky Navigation Panel */}
+      <RiderBottomNav activeTab="home" />
     </div>
   );
 }

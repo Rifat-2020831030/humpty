@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MapPin, Navigation, Sparkles, ArrowLeft, Check, Compass, Search } from 'lucide-react';
+import { MapPin, Navigation, Sparkles, ArrowLeft, Check, Compass, Search, Clock, Map } from 'lucide-react';
 import { VehicleType } from '../../types';
 
 export interface LocationSuggestion {
@@ -23,7 +23,9 @@ export interface LocationSearchProps {
   onToggleAI: () => void;
   onSubmitSearch?: () => void;
   onSelectSuggestion?: (item: any) => void;
+  onShowOnMap?: (item: any) => void;
   suggestions?: any[];
+  isAiSearched?: boolean;
   error?: string | null;
   isLoading?: boolean;
   onClearError?: () => void;
@@ -32,6 +34,14 @@ export interface LocationSearchProps {
   selectedVehicle?: VehicleType;
   onConfirm?: () => void;
 }
+
+const DEFAULT_RECENT_SEARCHES: LocationSuggestion[] = [
+  { displayName: 'Banani Road 11, Dhaka', lat: 23.7901, lng: 90.4062, category: 'Food & Shopping' },
+  { displayName: 'Gulshan 2 Circle, Dhaka', lat: 23.7938, lng: 90.4143, category: 'Commercial Hub' },
+  { displayName: 'Dhanmondi 27, Dhaka', lat: 23.7461, lng: 90.3742, category: 'Residential' },
+  { displayName: 'Jamuna Future Park, Kuril, Dhaka', lat: 23.8135, lng: 90.4242, category: 'Shopping Mall' },
+  { displayName: 'Hazrat Shahjalal International Airport', lat: 23.8433, lng: 90.4029, category: 'Transit' },
+];
 
 export function LocationSearch({
   pickupText,
@@ -45,7 +55,9 @@ export function LocationSearch({
   onToggleAI,
   onSubmitSearch,
   onSelectSuggestion,
+  onShowOnMap,
   suggestions = [],
+  isAiSearched = false,
   error,
   isLoading = false,
   onClearError,
@@ -56,8 +68,8 @@ export function LocationSearch({
 }: LocationSearchProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (onSubmitSearch) {
       onSubmitSearch();
     } else if (onConfirm) {
@@ -73,6 +85,19 @@ export function LocationSearch({
     }
   };
 
+  const handleShowOnMapClick = (item: any, idx: number) => {
+    setSelectedIdx(idx);
+    onDropoffChange(item.displayName || item.name);
+    if (onSelectSuggestion) {
+      onSelectSuggestion(item);
+    }
+    if (onShowOnMap) {
+      onShowOnMap(item);
+    } else if (onConfirm) {
+      onConfirm();
+    }
+  };
+
   const handleConfirmClick = () => {
     if (onConfirm) {
       onConfirm();
@@ -81,20 +106,19 @@ export function LocationSearch({
     }
   };
 
-  const handleAiSearchTrigger = () => {
-    if (!aiMode) {
-      onToggleAI();
-    }
-    if (onSubmitSearch) {
-      onSubmitSearch();
-    }
-  };
+  // Determine list of places to display:
+  // If AI search was performed or suggestions were explicitly provided and non-empty, use them;
+  // otherwise default to recent searches for both modes.
+  const displayPlaces =
+    suggestions && suggestions.length > 0 ? suggestions : DEFAULT_RECENT_SEARCHES;
+
+  const isShowingAiResults = isAiSearched || (aiMode && suggestions.length > 0 && dropoffText.trim().length > 0);
 
   return (
     <div
       className={`w-full min-h-screen bg-black text-white flex flex-col justify-between select-none ${className}`}
     >
-      {/* Top Header */}
+      {/* Top Header - Single clean header without duplicate AI toggle */}
       <div className="p-4 bg-neutral-950/95 border-b border-neutral-850 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {onBack && (
@@ -113,22 +137,9 @@ export function LocationSearch({
           </div>
         </div>
 
-        {/* Clean, Flat AI Toggle in Top Header */}
-        <button
-          type="button"
-          onClick={onToggleAI}
-          aria-pressed={aiMode}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-medium transition-colors border ${
-            aiMode
-              ? 'bg-emerald-600 border-emerald-500 text-white'
-              : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-neutral-200'
-          }`}
-          title="Toggle Gemini Natural Language AI search"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="font-bold">[AI]</span>
-          <span className="text-[11px]">{aiMode ? 'AI Mode ON' : 'Standard'}</span>
-        </button>
+        <div className="text-[11px] font-mono text-neutral-400">
+          Step 1 of 2
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -195,7 +206,7 @@ export function LocationSearch({
 
             <div className="h-px bg-neutral-850 w-full" />
 
-            {/* 2. Destination Input with Direct AI Search Integration */}
+            {/* 2. Destination Input with the ONLY AI Search Toggle Option Above Search Bar */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -203,23 +214,25 @@ export function LocationSearch({
                   <span>Destination</span>
                 </label>
 
-                {/* Direct AI Search Button / Switch in Destination Search */}
+                {/* THE ONLY AI TOGGLE OPTION: Positioned right above the search bar */}
                 <button
                   type="button"
                   onClick={onToggleAI}
                   aria-pressed={aiMode}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold transition-all border ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono font-medium transition-colors border ${
                     aiMode
-                      ? 'bg-emerald-600/90 border-emerald-500 text-white'
-                      : 'bg-neutral-900 border-neutral-750 text-neutral-400 hover:text-neutral-200 hover:border-emerald-500/40'
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-neutral-200'
                   }`}
+                  title={aiMode ? 'AI Search Active' : 'Enable AI Search'}
                 >
-                  <Sparkles className="w-3 h-3 text-emerald-400" />
-                  <span>{aiMode ? 'AI Search Active' : 'Enable AI Search'}</span>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="font-bold">[AI]</span>
+                  <span className="text-[11px]">{aiMode ? 'AI Mode ON' : 'Standard'}</span>
                 </button>
               </div>
 
-              {/* Destination Search Box with Inline AI Search Action */}
+              {/* Destination Search Box with dynamic Search button based on mode */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500">
@@ -246,21 +259,30 @@ export function LocationSearch({
                   />
                 </div>
 
-                {/* Explicit Ask AI / Search Button */}
-                <button
-                  type="button"
-                  onClick={handleAiSearchTrigger}
-                  disabled={isLoading}
-                  className={`px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 ${
-                    aiMode
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
-                      : 'bg-neutral-900 hover:bg-neutral-850 text-emerald-400 border border-neutral-750'
-                  }`}
-                  title="Search with Gemini AI"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Ask AI</span>
-                </button>
+                {/* Search Button: shows 'AI Search' text or Search icon based on AI toggle */}
+                {aiMode ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSubmit()}
+                    disabled={isLoading}
+                    className="px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-md shadow-emerald-950/40"
+                    title="Search with Gemini AI"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI Search</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSubmit()}
+                    disabled={isLoading}
+                    className="px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 bg-neutral-900 hover:bg-neutral-850 active:bg-neutral-800 text-neutral-200 border border-neutral-750"
+                    title="Search location"
+                  >
+                    <Search className="w-4 h-4 text-neutral-300" />
+                    <span>Search</span>
+                  </button>
+                )}
               </div>
 
               {/* Pin Destination Manually Option */}
@@ -278,41 +300,50 @@ export function LocationSearch({
           </div>
         </form>
 
-        {/* AI & Search Suggested Options to Choose From */}
+        {/* Suggested Places: Default is Recent Searches for both modes, or Gemini AI suggestions when searched */}
         <div className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{aiMode ? 'AI Return Options' : 'AI Suggested Places'}</span>
+              {isShowingAiResults ? (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Gemini AI Suggestions</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Recent Searches</span>
+                </>
+              )}
             </span>
             <span className="text-[10px] text-neutral-500 font-mono">
-              {isLoading ? 'Searching...' : 'Tap to pin on map'}
+              {isLoading ? 'Searching...' : isShowingAiResults ? 'AI Results' : 'Recent Places'}
             </span>
           </div>
 
           {isLoading ? (
             <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-850 flex items-center justify-center gap-2.5 text-xs text-emerald-400 font-mono">
               <span className="w-4 h-4 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
-              <span>Resolving Dhaka locations with AI...</span>
+              <span>Calling Gemini AI for Dhaka places...</span>
             </div>
           ) : (
-            <div className="space-y-1.5">
-              {suggestions.map((item, idx) => {
+            <div className="space-y-2">
+              {displayPlaces.map((item, idx) => {
                 const name = item.displayName || item.name;
                 const isSelected = selectedIdx === idx || dropoffText === name;
 
                 return (
-                  <button
+                  <div
                     key={idx}
-                    type="button"
                     onClick={() => handleSuggestionClick(item, idx)}
-                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                    className={`w-full p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
                       isSelected
                         ? 'bg-neutral-900 border-emerald-500 ring-1 ring-emerald-500/50 shadow-md'
                         : 'bg-neutral-950 hover:bg-neutral-900/80 border-neutral-850 text-neutral-300 hover:text-white'
                     }`}
                   >
-                    <div className="flex items-center gap-3 truncate">
+                    {/* Left: Icon & Place Description */}
+                    <div className="flex items-center gap-3 truncate min-w-0 flex-1">
                       <div
                         className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                           isSelected
@@ -320,22 +351,43 @@ export function LocationSearch({
                             : 'bg-neutral-900 text-neutral-400 border border-neutral-800'
                         }`}
                       >
-                        <MapPin className="w-4 h-4" />
+                        {isShowingAiResults ? (
+                          <MapPin className="w-4 h-4" />
+                        ) : (
+                          <Clock className="w-4 h-4 text-neutral-400" />
+                        )}
                       </div>
-                      <div className="truncate">
+                      <div className="truncate flex-1">
                         <div className="text-xs font-semibold text-white truncate">{name}</div>
                         <div className="text-[11px] text-neutral-400 truncate mt-0.5">
-                          {item.category || 'Dhaka Location'}
+                          {item.category || (isShowingAiResults ? 'Dhaka Match' : 'Recent Location')}
                         </div>
                       </div>
                     </div>
 
-                    {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-sm">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      </div>
-                    )}
-                  </button>
+                    {/* Right Action: Show on map button & Selection check */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Show on Map Functionality */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleShowOnMapClick(item, idx);
+                        }}
+                        className="px-2.5 py-1.5 bg-neutral-900 hover:bg-neutral-850 active:bg-neutral-800 border border-neutral-750 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 rounded-xl text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                        title="Show pin on map"
+                      >
+                        <Map className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Show on map</span>
+                      </button>
+
+                      {isSelected && (
+                        <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-sm">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>

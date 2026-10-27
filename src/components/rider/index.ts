@@ -30,3 +30,7 @@ export { default as RatingScreen } from './RatingScreen';
 
 export * from './DriverArrivedScreen';
 export { default as DriverArrivedScreen } from './DriverArrivedScreen';
+
+export * from './RiderBottomNav';
+export { default as RiderBottomNav } from './RiderBottomNav';
+

@@ -137,7 +137,7 @@ describe('LocationSearch Component', () => {
 
     expect(html).toContain('[AI]');
     expect(html).toContain('AI Mode ON');
-    expect(html).toContain('Ask AI');
+    expect(html).toContain('AI Search');
     expect(html).toContain('AI Search Active');
     // Enforce design constraint: strictly avoid neon blues, violet/purple gradients
     expect(html).not.toContain('bg-purple');
@@ -166,7 +166,7 @@ describe('LocationSearch Component', () => {
     expect(html).toContain('Use my GPS');
   });
 
-  it('renders suggestions list when suggestions are provided', () => {
+  it('renders suggestions list with Show on map buttons when suggestions are provided', () => {
     const suggestions = [
       { displayName: 'Dhanmondi 27, Dhaka', lat: 23.7461, lng: 90.3742 },
       { displayName: 'Gulshan 2 Circle', lat: 23.7925, lng: 90.4078 },
@@ -187,6 +187,7 @@ describe('LocationSearch Component', () => {
 
     expect(html).toContain('Dhanmondi 27, Dhaka');
     expect(html).toContain('Gulshan 2 Circle');
+    expect(html).toContain('Show on map');
   });
 });
 

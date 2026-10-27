@@ -138,18 +138,14 @@ function RiderContent() {
     }
   );
 
+  const [hasAiSearched, setHasAiSearched] = useState<boolean>(false);
+
   const locationSuggestions = useMemo(() => {
-    if (aiOptionsQuery.data && aiOptionsQuery.data.length > 0) {
+    if (dropoffText.trim().length > 0 && aiOptionsQuery.data && aiOptionsQuery.data.length > 0) {
       return aiOptionsQuery.data;
     }
-    return [
-      { displayName: 'Gulshan 2 Circle, Dhaka', lat: 23.7938, lng: 90.4143, category: 'Commercial' },
-      { displayName: 'Banani Road 11, Dhaka', lat: 23.7901, lng: 90.4062, category: 'Food & Shopping' },
-      { displayName: 'Dhanmondi 27 (Road 27), Dhaka', lat: 23.7461, lng: 90.3742, category: 'Residential' },
-      { displayName: 'Jamuna Future Park, Kuril, Dhaka', lat: 23.8135, lng: 90.4242, category: 'Shopping Mall' },
-      { displayName: 'Hazrat Shahjalal International Airport', lat: 23.8433, lng: 90.4029, category: 'Transit' },
-    ];
-  }, [aiOptionsQuery.data]);
+    return [];
+  }, [aiOptionsQuery.data, dropoffText]);
 
   // Ensure role is RIDER
   useEffect(() => {
@@ -598,26 +594,36 @@ function RiderContent() {
           pickupText={pickupText}
           dropoffText={dropoffText}
           onPickupChange={setPickupText}
-          onDropoffChange={setDropoffText}
+          onDropoffChange={(val) => {
+            setDropoffText(val);
+            if (!val.trim()) setHasAiSearched(false);
+          }}
           onUseGPS={requestGPS}
           onSelectManually={() => handleOpenManualPinPicker('pickup')}
           onSelectDropoffManually={() => handleOpenManualPinPicker('dropoff')}
           aiMode={aiMode}
           onToggleAI={() => setAiMode(!aiMode)}
           suggestions={locationSuggestions}
+          isAiSearched={hasAiSearched}
           isLoading={aiOptionsQuery.isFetching || aiSearchMutation.isPending}
-          onSubmitSearch={() => {
-            if (dropoffText) {
-              aiOptionsQuery.refetch();
+          onSubmitSearch={async () => {
+            if (dropoffText.trim()) {
+              if (aiMode) setHasAiSearched(true);
+              await aiOptionsQuery.refetch();
             }
           }}
           onSelectSuggestion={(item) => {
             setDropoffText(item.displayName || item.name);
             setDropoffCoord({ lat: item.lat, lng: item.lng });
           }}
+          onShowOnMap={(item) => {
+            setDropoffText(item.displayName || item.name);
+            setDropoffCoord({ lat: item.lat, lng: item.lng });
+            setCurrentStep('FARE_SELECT');
+          }}
           onConfirm={() => {
             if (!dropoffCoord) {
-              const defaultTarget = locationSuggestions[0] || {
+              const defaultTarget = (locationSuggestions[0] as any) || {
                 lat: 23.7938,
                 lng: 90.4143,
                 displayName: 'Gulshan 2 Circle, Dhaka',
@@ -644,7 +650,7 @@ function RiderContent() {
                 className="px-3 py-1.5 bg-neutral-950/90 hover:bg-neutral-900 border border-neutral-800 rounded-xl text-xs font-semibold text-neutral-200 shadow-xl backdrop-blur-md flex items-center gap-1.5 transition-all"
               >
                 <span>←</span>
-                <span>Locations</span>
+                <span>Back to locations</span>
               </button>
             </div>
           )}
@@ -935,15 +941,6 @@ function RiderContent() {
         ) : currentStep === 'FARE_SELECT' ? (
           /* Step: FARE SELECTOR */
           <div className="mt-auto pointer-events-auto">
-            <div className="mb-2 flex justify-start">
-              <button
-                type="button"
-                onClick={() => setCurrentStep('LOCATION_SEARCH')}
-                className="px-3 py-1.5 bg-neutral-900/90 border border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white"
-              >
-                ← Back to Locations
-              </button>
-            </div>
             <FareSelector
               distanceKm={routeDistanceKm}
               selectedVehicle={selectedVehicle}
