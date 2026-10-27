@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "cross-env NODE_ENV=production tsx server.ts",
     "lint": "next lint",
-    "test": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vitest run",
+    "test": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vitest run --no-file-parallelism",
     "test:watch": "vitest"
   },
   "dependencies": {

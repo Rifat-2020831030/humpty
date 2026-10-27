@@ -28,7 +28,7 @@ import { TRPCProvider } from '../../trpc/Provider';
 
 type RiderFlowStep = 'HOME' | 'LOCATION_SEARCH' | 'FARE_SELECT' | 'RATING_SCREEN';
 
-export function RiderContent() {
+function RiderContent() {
   const { sessionId, role, setRole } = useSession();
   const {
     location: userLocation,
