@@ -1,3 +1,4 @@
+/// <reference types="geojson" />
 import { HeatmapCell } from '../../types';
 
 /**
@@ -150,3 +151,4 @@ export function interpolatePosition(
 
   return [lat1 + (lat2 - lat1) * t, lng1 + (lng2 - lng1) * t];
 }
+
