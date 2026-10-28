@@ -37,7 +37,7 @@ export type RiderFlowStep =
   | 'RATING_SCREEN';
 
 function RiderContent() {
-  const { sessionId, role, setRole } = useSession();
+  const { sessionId, role, setRole, clearActiveRide } = useSession();
   const utils = trpc.useUtils();
 
   const {
@@ -71,6 +71,13 @@ function RiderContent() {
   });
   const [dropoffCoord, setDropoffCoord] = useState<{ lat: number; lng: number } | null>(null);
   const [isSearchingLocation, setIsSearchingLocation] = useState<boolean>(false);
+
+  // Stable Map Viewport Center
+  const [mapCenterCoord, setMapCenterCoord] = useState<[number, number]>([
+    DHAKA_CENTER[0],
+    DHAKA_CENTER[1],
+  ]);
+  const riderMapRef = useRef<maplibregl.Map | null>(null);
 
   // Manual Center Pin Picker State
   const [pinPickerTarget, setPinPickerTarget] = useState<'pickup' | 'dropoff'>('pickup');
@@ -254,9 +261,44 @@ function RiderContent() {
           lng: pickupCoord.lng,
           bearing: calculateBearing(pickupCoord.lat, pickupCoord.lng, dropoffCoord.lat, dropoffCoord.lng),
         });
+        setMapCenterCoord([pickupCoord.lat, pickupCoord.lng]);
+        if (riderMapRef.current) {
+          riderMapRef.current.flyTo({
+            center: [pickupCoord.lng, pickupCoord.lat],
+            zoom: 15,
+            speed: 1.4,
+            essential: true,
+          });
+        }
       }
     }
   };
+
+  // Sync map center to pickup position when not on an active trip
+  useEffect(() => {
+    if (!isTripActive && rideStatus !== 'IN_PROGRESS' && rideStatus !== 'COMPLETED') {
+      setMapCenterCoord([pickupCoord.lat, pickupCoord.lng]);
+    }
+  }, [pickupCoord.lat, pickupCoord.lng, isTripActive, rideStatus]);
+
+  // Recenter once on driver location when trip status transitions to IN_PROGRESS
+  const prevRideStatusRef = useRef<RideStatus | null>(rideStatus);
+  useEffect(() => {
+    if (rideStatus === 'IN_PROGRESS' && prevRideStatusRef.current !== 'IN_PROGRESS') {
+      const lat = driverCoord?.lat ?? pickupCoord.lat;
+      const lng = driverCoord?.lng ?? pickupCoord.lng;
+      setMapCenterCoord([lat, lng]);
+      if (riderMapRef.current) {
+        riderMapRef.current.flyTo({
+          center: [lng, lat],
+          zoom: 15,
+          speed: 1.4,
+          essential: true,
+        });
+      }
+    }
+    prevRideStatusRef.current = rideStatus;
+  }, [rideStatus, driverCoord?.lat, driverCoord?.lng, pickupCoord.lat, pickupCoord.lng]);
 
   // Local simulated driver movement in straight line (approaching pickup & going to destination)
   useEffect(() => {
@@ -509,19 +551,31 @@ function RiderContent() {
 
   // Handle Rating Submission
   const handleSubmitRating = async (rating: number, feedback: string) => {
-    if (!activeRideId) return;
     try {
-      await submitRatingMutation.mutateAsync({
-        rideId: activeRideId,
-        rating,
-        feedback,
-      });
+      if (activeRideId) {
+        await submitRatingMutation.mutateAsync({
+          rideId: activeRideId,
+          rating,
+          feedback,
+        });
+      }
+    } catch (err) {
+      console.warn('Rating submission server sync error (proceeding with local reset):', err);
+    } finally {
+      // Cleanly reset all ride states and return to the normal home page
       setActiveRideId(null);
       setRideStatus(null);
+      setDropoffCoord(null);
+      setDropoffText('');
+      setDriverCoord(null);
+      setApproachProgress(0);
+      setTripProgress(0);
+      setIsStartingTrip(false);
+      setIsConfirmingRide(false);
+      clearActiveRide();
       setCurrentStep('HOME');
+      setMapCenterCoord([pickupCoord.lat, pickupCoord.lng]);
       utils.ride.getActive.setData({ sessionId }, null);
-    } catch (err) {
-      console.error('Failed to submit rating:', err);
     }
   };
 
@@ -658,14 +712,15 @@ function RiderContent() {
           {/* Central Interactive Map Area */}
           <div className="absolute inset-0 z-0">
             <MapBase
-          center={
-            currentStep === 'MANUAL_PIN_PICKER'
-              ? [centerPinCoord.lat, centerPinCoord.lng]
-              : (isTripActive || rideStatus === 'IN_PROGRESS') && driverCoord
-              ? [driverCoord.lat, driverCoord.lng]
-              : [pickupCoord.lat, pickupCoord.lng]
-          }
-          zoom={14}
+              center={
+                currentStep === 'MANUAL_PIN_PICKER'
+                  ? [centerPinCoord.lat, centerPinCoord.lng]
+                  : mapCenterCoord
+              }
+              zoom={14}
+              onMapLoad={(map) => {
+                riderMapRef.current = map;
+              }}
           onMapMove={(c) => {
             if (currentStep === 'MANUAL_PIN_PICKER') {
               setCenterPinCoord(c);

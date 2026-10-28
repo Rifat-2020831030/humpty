@@ -261,16 +261,26 @@ export function MapBase({
     };
   }, [styleUrl, interactive]);
 
+  const prevCenterRef = useRef<[number, number] | null>(null);
+
   // Sync center when prop changes (for WebGL mode)
   useEffect(() => {
-    if (!mapRef.current || !isLoaded || webglUnavailable) return;
+    if (!mapRef.current || !isLoaded || webglUnavailable || !center) return;
     const target = toLngLat(center);
-    const curr = mapRef.current.getCenter();
-    if (
-      Math.abs(curr.lng - target[0]) > 0.0001 ||
-      Math.abs(curr.lat - target[1]) > 0.0001
-    ) {
-      mapRef.current.flyTo({ center: target, speed: 1.2 });
+    const hasTargetChanged =
+      !prevCenterRef.current ||
+      Math.abs(prevCenterRef.current[0] - target[0]) > 0.0001 ||
+      Math.abs(prevCenterRef.current[1] - target[1]) > 0.0001;
+
+    if (hasTargetChanged) {
+      prevCenterRef.current = target;
+      const curr = mapRef.current.getCenter();
+      if (
+        Math.abs(curr.lng - target[0]) > 0.0001 ||
+        Math.abs(curr.lat - target[1]) > 0.0001
+      ) {
+        mapRef.current.flyTo({ center: target, speed: 1.2 });
+      }
     }
   }, [center, isLoaded, webglUnavailable]);
 
