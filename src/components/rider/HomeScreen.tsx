@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, MapPin, Search, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight, MapPin, Search, Sparkles } from "lucide-react";
 import React, { useState } from "react";
 import { SEED_DRIVERS } from "../../lib/constants";
 import { VehicleType } from "../../types";
@@ -21,6 +21,7 @@ export interface HomeScreenProps {
   aiMode?: boolean;
   onToggleAi?: () => void;
   onSearchSubmit?: (query: string) => void;
+  onStartAgenticBooking?: (prompt: string) => void;
 }
 
 const QUICK_DESTINATIONS = [
@@ -44,12 +45,21 @@ export function HomeScreen({
   aiMode = false,
   onToggleAi,
   onSearchSubmit,
+  onStartAgenticBooking,
 }: HomeScreenProps) {
   const [internalAiMode, setInternalAiMode] = useState<boolean>(aiMode);
   const [destinationInput, setDestinationInput] = useState<string>("");
+  const [agenticInput, setAgenticInput] = useState<string>("");
   const [activeTab, setActiveTab] = useState<
     "home" | "rides" | "offers" | "profile"
   >("home");
+
+  const handleAgenticSubmit = () => {
+    const trimmed = agenticInput.trim();
+    if (trimmed && onStartAgenticBooking) {
+      onStartAgenticBooking(trimmed);
+    }
+  };
 
   const isAiActive = onToggleAi ? aiMode : internalAiMode;
 
@@ -108,6 +118,47 @@ export function HomeScreen({
 
       {/* Main Home Dashboard Body (Pathao App Style) */}
       <main className="flex-1 px-4 py-3.5 space-y-4 max-w-md mx-auto w-full">
+        {/* Top Instant-Typing Agentic Booking Bar */}
+        <div className="bg-gradient-to-r from-emerald-950/70 via-neutral-900 to-neutral-900 border border-emerald-500/40 hover:border-emerald-500/60 rounded-2xl p-3 shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-2 px-0.5">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 font-mono">
+                Agentic Ride Booking
+              </span>
+            </div>
+            <span className="text-[10px] text-neutral-400 font-mono">Instant AI Dispatch</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={agenticInput}
+              onChange={(e) => setAgenticInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAgenticSubmit();
+                }
+              }}
+              placeholder='✨ Ask GariKoi Agent: "Take me to Banani 11 by car"...'
+              aria-label="Instant agentic booking prompt"
+              data-testid="agentic-prompt-input"
+              className="flex-1 bg-neutral-950/90 border border-neutral-750 focus:border-emerald-500 rounded-xl text-xs text-white placeholder:text-neutral-500 px-3 py-2.5 outline-none transition-all"
+            />
+            <button
+              type="button"
+              onClick={handleAgenticSubmit}
+              aria-label="Book with Agent"
+              data-testid="agentic-submit-button"
+              className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1 shrink-0"
+            >
+              <span>Book</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
         {/* Current Pickup Location Banner - Interactive / Changeable */}
         <div
           role="button"

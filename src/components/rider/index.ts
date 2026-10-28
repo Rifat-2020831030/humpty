@@ -34,3 +34,8 @@ export { default as DriverArrivedScreen } from './DriverArrivedScreen';
 export * from './RiderBottomNav';
 export { default as RiderBottomNav } from './RiderBottomNav';
 
+export * from './AgenticBookingScreen';
+export { default as AgenticBookingScreen } from './AgenticBookingScreen';
+
+export * from './agentic';
+

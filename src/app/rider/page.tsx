@@ -19,6 +19,7 @@ import {
   TripActiveHUD,
   TripCompleted,
   RatingScreen,
+  AgenticBookingScreen,
 } from '../../components/rider';
 import {
   MapBase,
@@ -30,6 +31,7 @@ import { TRPCProvider } from '../../trpc/Provider';
 
 export type RiderFlowStep =
   | 'HOME'
+  | 'AGENTIC_BOOKING'
   | 'LOCATION_SEARCH'
   | 'DESTINATION_PREVIEW'
   | 'FARE_SELECT'
@@ -122,6 +124,13 @@ function RiderContent() {
       refetchInterval: activeRideId ? 3000 : false,
     }
   );
+
+  // Agentic Ride Booking State & Mutation
+  const [agentPrompt, setAgentPrompt] = useState<string>('');
+  const [agentAnsweredQuestions, setAgentAnsweredQuestions] = useState<
+    Array<{ id: string; field: string; question: string; answer: string }>
+  >([]);
+  const agentProcessBookingMutation = trpc.agent.processBooking.useMutation();
 
   // tRPC Mutations
   const requestMutation = trpc.ride.request.useMutation();
@@ -629,6 +638,84 @@ function RiderContent() {
     }
   };
 
+  // Handle Start Agentic Booking Flow
+  const handleStartAgenticBooking = (prompt: string) => {
+    setAgentPrompt(prompt);
+    setAgentAnsweredQuestions([]);
+    setCurrentStep('AGENTIC_BOOKING');
+    agentProcessBookingMutation.mutate({
+      prompt,
+      riderLat: pickupCoord.lat,
+      riderLng: pickupCoord.lng,
+      answeredQuestions: [],
+    });
+  };
+
+  // Handle Answering a Clarification Question
+  const handleAnswerAgentQuestion = (answer: { id: string; field: string; question: string; answer: string }) => {
+    const updated = [...agentAnsweredQuestions, answer];
+    setAgentAnsweredQuestions(updated);
+    agentProcessBookingMutation.mutate({
+      prompt: agentPrompt,
+      riderLat: pickupCoord.lat,
+      riderLng: pickupCoord.lng,
+      answeredQuestions: updated,
+    });
+  };
+
+  // Handle Confirming Agentic Ride Booking
+  const handleConfirmAgentBooking = async (details?: any) => {
+    const finalPickup = details?.pickup || { lat: pickupCoord.lat, lng: pickupCoord.lng, name: pickupText };
+    const finalDropoff = details?.dropoff || dropoffCoord;
+    const finalVehicle = (details?.vehicleType as VehicleType) || selectedVehicle;
+
+    if (!finalPickup || !finalDropoff) return;
+
+    setPickupCoord({ lat: finalPickup.lat, lng: finalPickup.lng });
+    setPickupText(finalPickup.name || 'Mohakhali, Dhaka');
+    setDropoffCoord({ lat: finalDropoff.lat, lng: finalDropoff.lng });
+    setDropoffText(finalDropoff.name || 'Dhaka Destination');
+    setSelectedVehicle(finalVehicle);
+
+    setIsConfirmingRide(true);
+    try {
+      const ride = await requestMutation.mutateAsync({
+        vehicleType: finalVehicle,
+        pickupLat: finalPickup.lat,
+        pickupLng: finalPickup.lng,
+        pickupAddress: finalPickup.name || pickupText || 'Mohakhali, Dhaka',
+        dropoffLat: finalDropoff.lat,
+        dropoffLng: finalDropoff.lng,
+        dropoffAddress: finalDropoff.name || 'Dhaka Destination',
+        riderSessionId: sessionId,
+      });
+
+      setActiveRideId(ride.id);
+      setRideStatus('SEARCHING');
+      utils.ride.getActive.setData({ sessionId }, ride);
+
+      await new Promise((r) => setTimeout(r, 400));
+      setCurrentStep('SEARCHING');
+    } catch (err) {
+      console.error('Failed to dispatch agentic ride:', err);
+    } finally {
+      setIsConfirmingRide(false);
+    }
+  };
+
+  // Handle "See on map" from Agent UI
+  const handleSeeOnMap = (location: { lat: number; lng: number; name: string }) => {
+    setMapCenterCoord([location.lat, location.lng]);
+    if (riderMapRef.current) {
+      riderMapRef.current.flyTo({
+        center: [location.lng, location.lat],
+        zoom: 15,
+        speed: 1.4,
+        essential: true,
+      });
+    }
+  };
+
   // Promo Code Application
   const handleApplyPromo = (code: string) => {
     const upper = code.trim().toUpperCase();
@@ -701,6 +788,29 @@ function RiderContent() {
             setSearchFocusField('dropoff');
             setCurrentStep('LOCATION_SEARCH');
           }}
+          onStartAgenticBooking={handleStartAgenticBooking}
+        />
+      ) : currentStep === 'AGENTIC_BOOKING' ? (
+        /* Executive Agentic Booking Screen */
+        <AgenticBookingScreen
+          prompt={agentPrompt}
+          status={
+            agentProcessBookingMutation.data?.status ||
+            (agentProcessBookingMutation.isPending ? 'PROCESSING' : 'NEED_CLARIFICATION')
+          }
+          steps={(agentProcessBookingMutation.data?.steps as any) || []}
+          extracted={agentProcessBookingMutation.data?.extracted as any}
+          questions={(agentProcessBookingMutation.data?.questions as any) || []}
+          answeredQuestions={agentAnsweredQuestions}
+          errorMessage={agentProcessBookingMutation.data?.errorMessage}
+          isLoading={agentProcessBookingMutation.isPending || isConfirmingRide}
+          onAnswerQuestion={handleAnswerAgentQuestion}
+          onConfirmBooking={handleConfirmAgentBooking}
+          onBack={() => setCurrentStep('HOME')}
+          onSwitchToManual={() => {
+            setCurrentStep('LOCATION_SEARCH');
+          }}
+          onSeeOnMap={handleSeeOnMap}
         />
       ) : isLocationSearchView ? (
         /* Blank screen with 2 search options on top, AI return options list, and confirm button on bottom (NO MAP) */

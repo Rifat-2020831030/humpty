@@ -41,3 +41,6 @@ prisma/*.db-journal
 # Worktrees
 .worktrees/
 worktrees/
+
+# Superpowers brainstorming
+.superpowers/
