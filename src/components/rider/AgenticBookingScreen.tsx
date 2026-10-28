@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   ArrowLeft,
   Sparkles,
@@ -81,6 +81,14 @@ export function AgenticBookingScreen({
   const isUnavailable = status === 'UNAVAILABLE';
   const hasUnfulfilledQuestions = questions && questions.length > 0 && !isReady && !isUnavailable;
 
+  const confirmationCardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (isReady && confirmationCardRef.current) {
+      confirmationCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isReady]);
+
   const getVehicleDisplay = (vehicleType?: string) => {
     switch (vehicleType) {
       case 'BIKE':
@@ -95,9 +103,9 @@ export function AgenticBookingScreen({
   };
 
   return (
-    <div className="w-full min-h-screen bg-neutral-950 text-white flex flex-col font-sans">
+    <div className="w-full h-full bg-neutral-950 text-white flex flex-col font-sans overflow-hidden">
       {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-neutral-950/90 backdrop-blur-md border-b border-neutral-800/80 px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-30 bg-neutral-950/90 backdrop-blur-md border-b border-neutral-800/80 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -148,8 +156,8 @@ export function AgenticBookingScreen({
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-xl w-full mx-auto p-4 space-y-4 pb-12">
+      {/* Main Scrollable Content Area */}
+      <main className="flex-1 max-w-xl w-full mx-auto p-4 space-y-4 pb-36 overflow-y-auto no-scrollbar">
         {/* Rider Prompt Banner */}
         <section
           data-testid="agentic-prompt-banner"
@@ -331,8 +339,9 @@ export function AgenticBookingScreen({
         {/* Final Confirmation Card */}
         {isReady && extracted && (
           <section
+            ref={confirmationCardRef}
             data-testid="final-confirmation-card"
-            className="bg-neutral-900 border border-emerald-500/40 rounded-2xl p-4 text-white shadow-2xl space-y-4 transition-all"
+            className="bg-neutral-900 border border-emerald-500/40 rounded-2xl p-4 text-white shadow-2xl space-y-4 transition-all scroll-mt-6"
           >
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <div className="flex items-center gap-2">
