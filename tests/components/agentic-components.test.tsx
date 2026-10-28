@@ -4,6 +4,7 @@ import ReactDOMServer from 'react-dom/server';
 import {
   QuestionCarousel,
   AnsweredCards,
+  MapLocationOverlay,
   type ClarificationQuestion,
   type AnsweredQuestion,
 } from '../../src/components/rider/agentic';
@@ -166,6 +167,47 @@ describe('AnsweredCards Component', () => {
     const html = ReactDOMServer.renderToStaticMarkup(
       React.createElement(AnsweredCards, {
         answeredQuestions: [],
+      })
+    );
+
+    expect(html).toBe('');
+  });
+});
+
+describe('MapLocationOverlay Component', () => {
+  const mockLoc = {
+    lat: 23.7783,
+    lng: 90.3980,
+    name: 'Mohakhali Wireless Gate',
+    type: 'pickup' as const,
+  };
+
+  it('renders overlay with title, close button, editable address input, and save button', () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      React.createElement(MapLocationOverlay, {
+        isOpen: true,
+        location: mockLoc,
+        onClose: () => {},
+        onSaveLocation: () => {},
+      })
+    );
+
+    expect(html).toContain('map-location-overlay');
+    expect(html).toContain('Pickup Location');
+    expect(html).toContain('Mohakhali Wireless Gate');
+    expect(html).toContain('close-map-overlay');
+    expect(html).toContain('edit-location-name-input');
+    expect(html).toContain('save-location-button');
+    expect(html).toContain('Save Location');
+  });
+
+  it('returns null when isOpen is false', () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      React.createElement(MapLocationOverlay, {
+        isOpen: false,
+        location: mockLoc,
+        onClose: () => {},
+        onSaveLocation: () => {},
       })
     );
 

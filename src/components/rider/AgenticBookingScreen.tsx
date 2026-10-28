@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Sparkles,
@@ -21,6 +21,7 @@ import {
   AnsweredQuestion,
 } from './agentic/QuestionCarousel';
 import { AnsweredCards } from './agentic/AnsweredCards';
+import { MapLocationOverlay } from './agentic/MapLocationOverlay';
 
 export interface TimelineStep {
   id: 'parse' | 'geo' | 'clarify' | 'pricing' | 'confirm' | string;
@@ -49,7 +50,8 @@ export interface AgenticBookingScreenProps {
   onConfirmBooking: (details?: ExtractedBookingDetails) => void;
   onBack: () => void;
   onSwitchToManual: () => void;
-  onSeeOnMap?: (location: { lat: number; lng: number; name: string }) => void;
+  onSeeOnMap?: (location: { lat: number; lng: number; name: string; type?: 'pickup' | 'dropoff' }) => void;
+  onUpdateLocation?: (location: { type: 'pickup' | 'dropoff'; lat: number; lng: number; name: string }) => void;
   isLoading?: boolean;
 }
 
@@ -74,6 +76,7 @@ export function AgenticBookingScreen({
   onBack,
   onSwitchToManual,
   onSeeOnMap,
+  onUpdateLocation,
   isLoading = false,
 }: AgenticBookingScreenProps) {
   const displaySteps = steps && steps.length > 0 ? steps : DEFAULT_STEPS;
@@ -82,6 +85,60 @@ export function AgenticBookingScreen({
   const hasUnfulfilledQuestions = questions && questions.length > 0 && !isReady && !isUnavailable;
 
   const confirmationCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Overlay & Editable Location State
+  const [activeMapLocation, setActiveMapLocation] = useState<{
+    lat: number;
+    lng: number;
+    name: string;
+    type?: 'pickup' | 'dropoff';
+  } | null>(null);
+
+  const [localExtracted, setLocalExtracted] = useState<ExtractedBookingDetails | undefined>(extracted);
+
+  useEffect(() => {
+    setLocalExtracted(extracted);
+  }, [extracted]);
+
+  const currentExtracted = localExtracted || extracted;
+
+  const handleOpenMapOverlay = (loc: { lat: number; lng: number; name: string; type?: 'pickup' | 'dropoff' }) => {
+    setActiveMapLocation(loc);
+    if (onSeeOnMap) {
+      onSeeOnMap(loc);
+    }
+  };
+
+  const handleSaveLocation = (updated: {
+    lat: number;
+    lng: number;
+    name: string;
+    type?: 'pickup' | 'dropoff';
+  }) => {
+    setLocalExtracted((prev) => {
+      if (!prev) return prev;
+      if (updated.type === 'pickup') {
+        return {
+          ...prev,
+          pickup: { lat: updated.lat, lng: updated.lng, name: updated.name },
+        };
+      } else {
+        return {
+          ...prev,
+          dropoff: { lat: updated.lat, lng: updated.lng, name: updated.name },
+        };
+      }
+    });
+
+    if (onUpdateLocation && updated.type) {
+      onUpdateLocation({
+        type: updated.type,
+        lat: updated.lat,
+        lng: updated.lng,
+        name: updated.name,
+      });
+    }
+  };
 
   useEffect(() => {
     if (isReady && confirmationCardRef.current) {
@@ -279,40 +336,50 @@ export function AgenticBookingScreen({
                   )}
 
                   {/* If this is the geo step and coordinates are resolved, show "See on map" links */}
-                  {step.id === 'geo' && isCompleted && extracted && (
+                  {step.id === 'geo' && isCompleted && currentExtracted && (
                     <div className="mt-1.5 space-y-1.5 pt-0.5">
-                      {extracted.pickup && (
+                      {currentExtracted.pickup && (
                         <div className="flex items-center justify-between gap-2 text-[11px] bg-neutral-950/60 px-2.5 py-1 rounded-lg border border-neutral-850">
                           <span className="text-neutral-300 truncate">
-                            Pickup: {extracted.pickup.name}
+                            Pickup: {currentExtracted.pickup.name}
                           </span>
-                          {onSeeOnMap && (
-                            <button
-                              type="button"
-                              onClick={() => onSeeOnMap(extracted.pickup!)}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-[10px] text-emerald-300 hover:text-white transition-colors shrink-0"
-                            >
-                              <Compass className="w-2.5 h-2.5 text-emerald-400" />
-                              <span>See on map</span>
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenMapOverlay({
+                                lat: currentExtracted.pickup!.lat,
+                                lng: currentExtracted.pickup!.lng,
+                                name: currentExtracted.pickup!.name,
+                                type: 'pickup',
+                              })
+                            }
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-[10px] text-emerald-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+                          >
+                            <Compass className="w-2.5 h-2.5 text-emerald-400" />
+                            <span>See on map</span>
+                          </button>
                         </div>
                       )}
-                      {extracted.dropoff && (
+                      {currentExtracted.dropoff && (
                         <div className="flex items-center justify-between gap-2 text-[11px] bg-neutral-950/60 px-2.5 py-1 rounded-lg border border-neutral-850">
                           <span className="text-neutral-300 truncate">
-                            Dropoff: {extracted.dropoff.name}
+                            Dropoff: {currentExtracted.dropoff.name}
                           </span>
-                          {onSeeOnMap && (
-                            <button
-                              type="button"
-                              onClick={() => onSeeOnMap(extracted.dropoff!)}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-[10px] text-rose-300 hover:text-white transition-colors shrink-0"
-                            >
-                              <Compass className="w-2.5 h-2.5 text-rose-400" />
-                              <span>See on map</span>
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenMapOverlay({
+                                lat: currentExtracted.dropoff!.lat,
+                                lng: currentExtracted.dropoff!.lng,
+                                name: currentExtracted.dropoff!.name,
+                                type: 'dropoff',
+                              })
+                            }
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-[10px] text-rose-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+                          >
+                            <Compass className="w-2.5 h-2.5 text-rose-400" />
+                            <span>See on map</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -337,7 +404,7 @@ export function AgenticBookingScreen({
         )}
 
         {/* Final Confirmation Card */}
-        {isReady && extracted && (
+        {isReady && currentExtracted && (
           <section
             ref={confirmationCardRef}
             data-testid="final-confirmation-card"
@@ -368,15 +435,22 @@ export function AgenticBookingScreen({
                       Pickup Location
                     </span>
                     <p className="text-xs font-semibold text-neutral-100 truncate">
-                      {extracted.pickup?.name || 'Current Location'}
+                      {currentExtracted.pickup?.name || 'Current Location'}
                     </p>
                   </div>
                 </div>
-                {extracted.pickup && onSeeOnMap && (
+                {currentExtracted.pickup && (
                   <button
                     type="button"
-                    onClick={() => onSeeOnMap(extracted.pickup!)}
-                    className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-[10px] font-medium text-emerald-300 hover:text-white transition-colors"
+                    onClick={() =>
+                      handleOpenMapOverlay({
+                        lat: currentExtracted.pickup!.lat,
+                        lng: currentExtracted.pickup!.lng,
+                        name: currentExtracted.pickup!.name,
+                        type: 'pickup',
+                      })
+                    }
+                    className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-[10px] font-medium text-emerald-300 hover:text-white transition-colors cursor-pointer"
                   >
                     <MapPin className="w-3 h-3 text-emerald-400" />
                     <span>See on map</span>
@@ -396,15 +470,22 @@ export function AgenticBookingScreen({
                       Dropoff Destination
                     </span>
                     <p className="text-xs font-semibold text-neutral-100 truncate">
-                      {extracted.dropoff?.name || 'Destination'}
+                      {currentExtracted.dropoff?.name || 'Destination'}
                     </p>
                   </div>
                 </div>
-                {extracted.dropoff && onSeeOnMap && (
+                {currentExtracted.dropoff && (
                   <button
                     type="button"
-                    onClick={() => onSeeOnMap(extracted.dropoff!)}
-                    className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-[10px] font-medium text-rose-300 hover:text-white transition-colors"
+                    onClick={() =>
+                      handleOpenMapOverlay({
+                        lat: currentExtracted.dropoff!.lat,
+                        lng: currentExtracted.dropoff!.lng,
+                        name: currentExtracted.dropoff!.name,
+                        type: 'dropoff',
+                      })
+                    }
+                    className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 text-[10px] font-medium text-rose-300 hover:text-white transition-colors cursor-pointer"
                   >
                     <MapPin className="w-3 h-3 text-rose-400" />
                     <span>See on map</span>
@@ -418,22 +499,22 @@ export function AgenticBookingScreen({
               <div className="p-2.5 bg-neutral-950/70 border border-neutral-850 rounded-xl">
                 <span className="text-[10px] text-neutral-400 block font-mono">Vehicle</span>
                 <span className="text-xs font-bold text-neutral-200 mt-0.5 block truncate">
-                  {getVehicleDisplay(extracted.vehicleType)}
+                  {getVehicleDisplay(currentExtracted.vehicleType)}
                 </span>
               </div>
               <div className="p-2.5 bg-neutral-950/70 border border-neutral-850 rounded-xl">
                 <span className="text-[10px] text-neutral-400 block font-mono">Distance</span>
                 <span className="text-xs font-bold text-neutral-200 mt-0.5 block font-mono">
-                  {extracted.estimatedDistanceKm !== undefined
-                    ? `${extracted.estimatedDistanceKm.toFixed(1)} km`
+                  {currentExtracted.estimatedDistanceKm !== undefined
+                    ? `${currentExtracted.estimatedDistanceKm.toFixed(1)} km`
                     : '--'}
                 </span>
               </div>
               <div className="p-2.5 bg-neutral-950/70 border border-neutral-850 rounded-xl">
                 <span className="text-[10px] text-neutral-400 block font-mono">Estimated Fare</span>
                 <span className="text-xs font-extrabold text-emerald-400 mt-0.5 block font-mono">
-                  {extracted.estimatedFare !== undefined
-                    ? `৳ ${extracted.estimatedFare}`
+                  {currentExtracted.estimatedFare !== undefined
+                    ? `৳ ${currentExtracted.estimatedFare}`
                     : '--'}
                 </span>
               </div>
@@ -442,7 +523,7 @@ export function AgenticBookingScreen({
             {/* Prominent Action Button */}
             <button
               type="button"
-              onClick={() => onConfirmBooking(extracted)}
+              onClick={() => onConfirmBooking(currentExtracted)}
               className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-900/30 transition-all duration-200 flex items-center justify-center gap-2 group cursor-pointer"
             >
               <span>Confirm & Book Ride</span>
@@ -451,6 +532,14 @@ export function AgenticBookingScreen({
           </section>
         )}
       </main>
+
+      {/* Map Location Overlay Modal with Close & Edit Options */}
+      <MapLocationOverlay
+        isOpen={Boolean(activeMapLocation)}
+        location={activeMapLocation}
+        onClose={() => setActiveMapLocation(null)}
+        onSaveLocation={handleSaveLocation}
+      />
     </div>
   );
 }

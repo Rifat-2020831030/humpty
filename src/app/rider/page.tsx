@@ -716,6 +716,23 @@ function RiderContent() {
     }
   };
 
+  // Handle Location Update from Agent Map Overlay
+  const handleUpdateAgentLocation = (updated: {
+    type: 'pickup' | 'dropoff';
+    lat: number;
+    lng: number;
+    name: string;
+  }) => {
+    if (updated.type === 'pickup') {
+      setPickupCoord({ lat: updated.lat, lng: updated.lng });
+      setPickupText(updated.name);
+      setManualPin(updated.lat, updated.lng);
+    } else {
+      setDropoffCoord({ lat: updated.lat, lng: updated.lng });
+      setDropoffText(updated.name);
+    }
+  };
+
   // Promo Code Application
   const handleApplyPromo = (code: string) => {
     const upper = code.trim().toUpperCase();
@@ -811,6 +828,7 @@ function RiderContent() {
             setCurrentStep('LOCATION_SEARCH');
           }}
           onSeeOnMap={handleSeeOnMap}
+          onUpdateLocation={handleUpdateAgentLocation}
         />
       ) : isLocationSearchView ? (
         /* Blank screen with 2 search options on top, AI return options list, and confirm button on bottom (NO MAP) */
