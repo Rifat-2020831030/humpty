@@ -71,26 +71,26 @@ export function OffersStrip({ onApplyPromo, className = '' }: OffersStripProps) 
 
           return (
             <div key={offer.id} className="w-full flex-shrink-0 px-0.5">
-              <div className="flex items-center justify-between gap-3 p-3 bg-gradient-to-r from-neutral-900 to-neutral-900/90 border border-neutral-800 hover:border-neutral-700 rounded-2xl text-xs shadow-md transition-all">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <div className="flex items-center justify-between gap-3 p-4 sm:p-5 min-h-[96px] bg-gradient-to-r from-neutral-900 to-neutral-900/90 border border-neutral-800 hover:border-neutral-700 rounded-2xl text-xs shadow-md transition-all">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
                     {idx === 0 ? (
-                      <Tag className="w-4 h-4" />
+                      <Tag className="w-5 h-5" />
                     ) : idx === 1 ? (
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="w-5 h-5" />
                     ) : (
-                      <span className="text-sm font-bold">🌙</span>
+                      <span className="text-base font-bold">🌙</span>
                     )}
                   </div>
                   <div className="flex flex-col">
-                    <div className="flex items-center gap-1.5 font-medium text-neutral-200">
-                      <span className="text-emerald-400 font-mono font-bold tracking-wider">
+                    <div className="flex items-center gap-2 font-medium text-neutral-200">
+                      <span className="text-emerald-400 font-mono text-sm font-extrabold tracking-wider">
                         {offer.code}
                       </span>
                       <span className="text-neutral-500">•</span>
-                      <span className="text-emerald-300 font-semibold">{offer.discount}</span>
+                      <span className="text-emerald-300 font-bold text-xs">{offer.discount}</span>
                     </div>
-                    <div className="text-[11px] text-neutral-400 leading-tight mt-0.5">
+                    <div className="text-xs text-neutral-400 leading-snug mt-1">
                       {offer.details}
                     </div>
                   </div>
@@ -100,10 +100,10 @@ export function OffersStrip({ onApplyPromo, className = '' }: OffersStripProps) 
                   type="button"
                   onClick={() => handleApply(offer.code)}
                   disabled={isApplied}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                  className={`px-4 py-2 rounded-xl text-xs font-bold shrink-0 transition-all ${
                     isApplied
                       ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/40'
-                      : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-sm'
+                      : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-sm hover:shadow-emerald-950/40'
                   }`}
                 >
                   {isApplied ? 'Applied ✓' : 'Apply'}

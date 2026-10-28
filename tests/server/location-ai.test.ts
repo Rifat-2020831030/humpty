@@ -3,6 +3,8 @@ import { DHAKA_CENTER } from '../../src/lib/constants';
 import {
   resolveNaturalLanguageLocation,
   getDhakaLandmarksAutocomplete,
+  getDhakaLandmarksOptions,
+  clearAiMemoryCache,
   DHAKA_LANDMARKS,
 } from '../../src/server/ai/gemini';
 import { locationRouter } from '../../src/server/routers/location';
@@ -15,6 +17,7 @@ describe('AI Location Resolver and Location Router', () => {
 
   beforeEach(() => {
     delete process.env.GEMINI_API_KEY;
+    clearAiMemoryCache();
     vi.restoreAllMocks();
   });
 
@@ -239,6 +242,88 @@ describe('AI Location Resolver and Location Router', () => {
     });
   });
 
+  describe('Local Memory Caching for Gemini AI Responses', () => {
+    it('caches natural language resolution responses so subsequent identical calls do not invoke fetch', async () => {
+      process.env.GEMINI_API_KEY = 'test-gemini-key';
+
+      const mockResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    lat: 23.7938,
+                    lng: 90.4143,
+                    displayName: 'Gulshan 2 Circle',
+                    confidence: 0.95,
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse,
+      } as Response);
+
+      // First call: calls fetch
+      const result1 = await resolveNaturalLanguageLocation('Gulshan 2 Pink City');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(result1.displayName).toBe('Gulshan 2 Circle');
+
+      // Second call with same input: served from memory cache!
+      const result2 = await resolveNaturalLanguageLocation('Gulshan 2 Pink City');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(result2.displayName).toBe('Gulshan 2 Circle');
+    });
+
+    it('caches multi-option place suggestions in local memory', async () => {
+      process.env.GEMINI_API_KEY = 'test-gemini-key';
+
+      const mockResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      displayName: 'Dhanmondi 27 Hub',
+                      lat: 23.7461,
+                      lng: 90.3742,
+                      category: 'Residential',
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse,
+      } as Response);
+
+      // First call: calls fetch
+      const options1 = await getDhakaLandmarksOptions('Dhanmondi 27');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(options1[0].displayName).toBe('Dhanmondi 27 Hub');
+
+      // Second call: served from memory cache without invoking fetch!
+      const options2 = await getDhakaLandmarksOptions('Dhanmondi 27');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(options2[0].displayName).toBe('Dhanmondi 27 Hub');
+    });
+  });
+
   describe('locationRouter and autocomplete', () => {
     it('exposes aiSearch mutation and autocomplete query on locationRouter', () => {
       expect(locationRouter._def.procedures).toHaveProperty('aiSearch');
@@ -368,6 +453,26 @@ describe('AI Location Resolver and Location Router', () => {
       expect(updateSpy).not.toHaveBeenCalled();
 
       stopDriverSimulation(rideIdCancelled);
+    });
+  });
+
+  describe('getDhakaLandmarksAutocomplete (Real Dhaka places)', () => {
+    it('returns Mohakhali locations for mohakhali query with default coordinates', () => {
+      const results = getDhakaLandmarksAutocomplete('mohakhali');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.some((r) => r.displayName.includes('Mohakhali'))).toBe(true);
+      const mohakhali = results.find((r) => r.displayName === 'Mohakhali, Dhaka');
+      expect(mohakhali).toBeDefined();
+      expect(mohakhali?.lat).toBeCloseTo(23.77836, 3);
+      expect(mohakhali?.lng).toBeCloseTo(90.39804, 3);
+    });
+
+    it('matches real places like Banani 11, Gulshan 1, and Dhanmondi 27', () => {
+      const banani = getDhakaLandmarksAutocomplete('banani 11');
+      expect(banani.some((r) => r.displayName.includes('Banani'))).toBe(true);
+
+      const gulshan = getDhakaLandmarksAutocomplete('gulshan 1');
+      expect(gulshan.some((r) => r.displayName.includes('Gulshan 1'))).toBe(true);
     });
   });
 });

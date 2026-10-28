@@ -113,7 +113,7 @@ export default function RoleSplashPage() {
             <div>
               <span className="font-bold text-white block">Dhaka Roads</span>
               <span className="text-neutral-500 text-[10px]">
-                Real street coordinates simulation
+                Real street simulation
               </span>
             </div>
           </div>
@@ -125,7 +125,7 @@ export default function RoleSplashPage() {
                 Live Demand Heatmap
               </span>
               <span className="text-neutral-500 text-[10px]">
-                Real-time driver density analytics
+                Real-time passenger density analytics
               </span>
             </div>
           </div>

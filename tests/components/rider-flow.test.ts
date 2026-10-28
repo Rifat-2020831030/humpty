@@ -54,6 +54,23 @@ describe('HomeScreen Component', () => {
     expect(html).toContain('Gulshan 2, Dhaka');
     expect(html).toContain('Select Service');
   });
+
+  it('renders interactive pickup point banner with Change action and removes Safe & Utilitarian section', () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      React.createElement(HomeScreen, {
+        selectedVehicle: 'BIKE',
+        onSelectVehicle: () => {},
+        onOpenSearch: () => {},
+        userLocationName: 'Mohakhali, Dhaka',
+        nearbyDriversCount: 5,
+      })
+    );
+
+    expect(html).toContain('Pickup Point • Tap to Change');
+    expect(html).toContain('Change');
+    expect(html).toContain('Mohakhali, Dhaka');
+    expect(html).not.toContain('Safe & Utilitarian Rides');
+  });
 });
 
 describe('ServiceTiles Component', () => {

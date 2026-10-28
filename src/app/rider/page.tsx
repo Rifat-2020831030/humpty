@@ -31,10 +31,16 @@ import { TRPCProvider } from '../../trpc/Provider';
 export type RiderFlowStep =
   | 'HOME'
   | 'LOCATION_SEARCH'
+  | 'DESTINATION_PREVIEW'
   | 'FARE_SELECT'
   | 'MANUAL_PIN_PICKER'
   | 'SEARCHING'
   | 'RATING_SCREEN';
+
+const MOHAKHALI_COORDINATES = {
+  lat: 23.778363865941,
+  lng: 90.39804578897022,
+};
 
 function RiderContent() {
   const { sessionId, role, setRole, clearActiveRide } = useSession();
@@ -49,41 +55,42 @@ function RiderContent() {
     clearError: clearLocationError,
   } = useLocation({
     initialLocation: {
-      lat: DHAKA_CENTER[0],
-      lng: DHAKA_CENTER[1],
-      displayName: 'Banani / Mohakhali, Dhaka',
+      lat: MOHAKHALI_COORDINATES.lat,
+      lng: MOHAKHALI_COORDINATES.lng,
+      displayName: 'Mohakhali, Dhaka',
     },
   });
 
   // Flow State
   const [currentStep, setCurrentStep] = useState<RiderFlowStep>('HOME');
+  const [searchFocusField, setSearchFocusField] = useState<'pickup' | 'dropoff'>('dropoff');
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('BIKE');
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
 
   // Search Inputs
-  const [pickupText, setPickupText] = useState<string>('Banani / Mohakhali, Dhaka');
+  const [pickupText, setPickupText] = useState<string>('Mohakhali, Dhaka');
   const [dropoffText, setDropoffText] = useState<string>('');
   const [aiMode, setAiMode] = useState<boolean>(false);
   const [pickupCoord, setPickupCoord] = useState<{ lat: number; lng: number }>({
-    lat: DHAKA_CENTER[0],
-    lng: DHAKA_CENTER[1],
+    lat: MOHAKHALI_COORDINATES.lat,
+    lng: MOHAKHALI_COORDINATES.lng,
   });
   const [dropoffCoord, setDropoffCoord] = useState<{ lat: number; lng: number } | null>(null);
   const [isSearchingLocation, setIsSearchingLocation] = useState<boolean>(false);
 
   // Stable Map Viewport Center
   const [mapCenterCoord, setMapCenterCoord] = useState<[number, number]>([
-    DHAKA_CENTER[0],
-    DHAKA_CENTER[1],
+    MOHAKHALI_COORDINATES.lat,
+    MOHAKHALI_COORDINATES.lng,
   ]);
   const riderMapRef = useRef<maplibregl.Map | null>(null);
 
   // Manual Center Pin Picker State
   const [pinPickerTarget, setPinPickerTarget] = useState<'pickup' | 'dropoff'>('pickup');
   const [centerPinCoord, setCenterPinCoord] = useState<{ lat: number; lng: number }>({
-    lat: DHAKA_CENTER[0],
-    lng: DHAKA_CENTER[1],
+    lat: MOHAKHALI_COORDINATES.lat,
+    lng: MOHAKHALI_COORDINATES.lng,
   });
   const [isMapMoving, setIsMapMoving] = useState<boolean>(false);
 
@@ -133,26 +140,69 @@ function RiderContent() {
     { enabled: Boolean(activeRideId && isChatOpen), refetchInterval: isChatOpen ? 2000 : false }
   );
 
-  // AI Location Options Query (returns multiple Dhaka options to choose from)
+  const isManualSelectionRef = useRef<boolean>(false);
+  const [submittedSearchQuery, setSubmittedSearchQuery] = useState<string>('');
+  const [hasUserSubmittedSearch, setHasUserSubmittedSearch] = useState<boolean>(false);
+
+  // Standard Dhaka place autocomplete query (Deterministic, NO AI calls)
+  // ONLY triggered when user explicitly presses search button
+  const autocompleteQuery = trpc.location.autocomplete.useQuery(
+    { query: submittedSearchQuery || '' },
+    {
+      enabled:
+        currentStep === 'LOCATION_SEARCH' &&
+        !aiMode &&
+        hasUserSubmittedSearch &&
+        Boolean(submittedSearchQuery.trim()),
+    }
+  );
+
+  // AI Location Options Query (Only when aiMode is ON and user explicitly presses search button)
+  // ONLY triggered when user explicitly presses search button
   const aiOptionsQuery = trpc.location.aiSearchOptions.useQuery(
     {
-      query: dropoffText || '',
+      query: submittedSearchQuery || '',
       contextLat: pickupCoord?.lat,
       contextLng: pickupCoord?.lng,
     },
     {
-      enabled: currentStep === 'LOCATION_SEARCH' || currentStep === 'HOME',
+      enabled:
+        currentStep === 'LOCATION_SEARCH' &&
+        aiMode &&
+        hasUserSubmittedSearch &&
+        Boolean(submittedSearchQuery.trim()),
     }
   );
 
   const [hasAiSearched, setHasAiSearched] = useState<boolean>(false);
 
+  const handleExecuteSearch = useCallback(
+    (queryToSearch?: string) => {
+      const q = (queryToSearch ?? dropoffText).trim();
+      if (!q) return;
+      isManualSelectionRef.current = false;
+      setSubmittedSearchQuery(q);
+      setHasUserSubmittedSearch(true);
+      if (aiMode) {
+        setHasAiSearched(true);
+      }
+    },
+    [dropoffText, aiMode]
+  );
+
   const locationSuggestions = useMemo(() => {
-    if (dropoffText.trim().length > 0 && aiOptionsQuery.data && aiOptionsQuery.data.length > 0) {
-      return aiOptionsQuery.data;
+    if (!hasUserSubmittedSearch || !submittedSearchQuery.trim()) return [];
+    if (aiMode) {
+      if (aiOptionsQuery.data && aiOptionsQuery.data.length > 0) {
+        return aiOptionsQuery.data;
+      }
+    } else {
+      if (autocompleteQuery.data && autocompleteQuery.data.length > 0) {
+        return autocompleteQuery.data;
+      }
     }
     return [];
-  }, [aiOptionsQuery.data, dropoffText]);
+  }, [aiMode, aiOptionsQuery.data, autocompleteQuery.data, hasUserSubmittedSearch, submittedSearchQuery]);
 
   // Ensure role is RIDER
   useEffect(() => {
@@ -514,7 +564,7 @@ function RiderContent() {
         vehicleType: selectedVehicle,
         pickupLat: pickupCoord.lat,
         pickupLng: pickupCoord.lng,
-        pickupAddress: pickupText || 'Banani / Mohakhali, Dhaka',
+        pickupAddress: pickupText || 'Mohakhali, Dhaka',
         dropoffLat: dropoffCoord.lat,
         dropoffLng: dropoffCoord.lng,
         dropoffAddress: dropoffText || 'Dhaka Destination',
@@ -630,15 +680,25 @@ function RiderContent() {
           selectedVehicle={selectedVehicle}
           onSelectVehicle={(vehicle) => {
             setSelectedVehicle(vehicle);
+            setSearchFocusField('dropoff');
             setCurrentStep('LOCATION_SEARCH');
           }}
-          onOpenSearch={() => setCurrentStep('LOCATION_SEARCH')}
+          onOpenSearch={(focus) => {
+            setSearchFocusField(focus || 'dropoff');
+            setCurrentStep('LOCATION_SEARCH');
+          }}
+          onChangePickup={() => {
+            setSearchFocusField('pickup');
+            setCurrentStep('LOCATION_SEARCH');
+          }}
           onApplyPromo={handleApplyPromo}
           userLocationName={pickupText}
           aiMode={aiMode}
           onToggleAi={() => setAiMode(!aiMode)}
           onSearchSubmit={(query) => {
             setDropoffText(query);
+            handleExecuteSearch(query);
+            setSearchFocusField('dropoff');
             setCurrentStep('LOCATION_SEARCH');
           }}
         />
@@ -647,33 +707,64 @@ function RiderContent() {
         <LocationSearch
           pickupText={pickupText}
           dropoffText={dropoffText}
-          onPickupChange={setPickupText}
+          initialFocusField={searchFocusField}
+          onPickupChange={(val) => {
+            setPickupText(val);
+          }}
+          onSelectPickupSuggestion={(item) => {
+            setPickupText(item.displayName || item.name);
+            setPickupCoord({ lat: item.lat, lng: item.lng });
+            setManualPin(item.lat, item.lng);
+          }}
           onDropoffChange={(val) => {
+            isManualSelectionRef.current = false;
             setDropoffText(val);
-            if (!val.trim()) setHasAiSearched(false);
+            if (!val.trim()) {
+              setHasAiSearched(false);
+              setHasUserSubmittedSearch(false);
+              setSubmittedSearchQuery('');
+            }
           }}
           onUseGPS={requestGPS}
           onSelectManually={() => handleOpenManualPinPicker('pickup')}
           onSelectDropoffManually={() => handleOpenManualPinPicker('dropoff')}
           aiMode={aiMode}
-          onToggleAI={() => setAiMode(!aiMode)}
+          onToggleAI={() => {
+            setAiMode(!aiMode);
+            setHasUserSubmittedSearch(false);
+            setSubmittedSearchQuery('');
+          }}
           suggestions={locationSuggestions}
           isAiSearched={hasAiSearched}
-          isLoading={aiOptionsQuery.isFetching || aiSearchMutation.isPending}
-          onSubmitSearch={async () => {
-            if (dropoffText.trim()) {
-              if (aiMode) setHasAiSearched(true);
-              await aiOptionsQuery.refetch();
-            }
+          isLoading={
+            aiMode
+              ? aiOptionsQuery.isFetching || aiSearchMutation.isPending
+              : autocompleteQuery.isFetching
+          }
+          onSubmitSearch={() => {
+            handleExecuteSearch();
           }}
           onSelectSuggestion={(item) => {
+            isManualSelectionRef.current = true;
             setDropoffText(item.displayName || item.name);
             setDropoffCoord({ lat: item.lat, lng: item.lng });
           }}
           onShowOnMap={(item) => {
-            setDropoffText(item.displayName || item.name);
-            setDropoffCoord({ lat: item.lat, lng: item.lng });
-            setCurrentStep('FARE_SELECT');
+            isManualSelectionRef.current = true;
+            const destName = item.displayName || item.name;
+            const destCoord = { lat: item.lat, lng: item.lng };
+            setDropoffText(destName);
+            setDropoffCoord(destCoord);
+            setMapCenterCoord([destCoord.lat, destCoord.lng]);
+            setCurrentStep('DESTINATION_PREVIEW');
+            if (riderMapRef.current) {
+              riderMapRef.current.flyTo({
+                center: [destCoord.lng, destCoord.lat],
+                zoom: 15,
+                speed: 1.4,
+                essential: true,
+              });
+            }
           }}
           onConfirm={() => {
             if (!dropoffCoord) {
@@ -693,10 +784,10 @@ function RiderContent() {
           onClearError={clearLocationError}
         />
       ) : (
-        /* Map View: FARE_SELECT, ACTIVE TRIP, MANUAL PIN PICKER */
+        /* Map View: FARE_SELECT, DESTINATION_PREVIEW, ACTIVE TRIP, MANUAL PIN PICKER */
         <div className="relative w-full h-full flex flex-col overflow-hidden">
-          {/* Top Back-to-Locations Button when in FARE_SELECT */}
-          {currentStep === 'FARE_SELECT' && (
+          {/* Top Back-to-Locations Button when in FARE_SELECT or DESTINATION_PREVIEW */}
+          {(currentStep === 'FARE_SELECT' || currentStep === 'DESTINATION_PREVIEW') && (
             <div className="absolute top-3 left-3 z-30 pointer-events-auto">
               <button
                 type="button"
@@ -715,9 +806,11 @@ function RiderContent() {
               center={
                 currentStep === 'MANUAL_PIN_PICKER'
                   ? [centerPinCoord.lat, centerPinCoord.lng]
+                  : currentStep === 'DESTINATION_PREVIEW' && dropoffCoord
+                  ? [dropoffCoord.lat, dropoffCoord.lng]
                   : mapCenterCoord
               }
-              zoom={14}
+              zoom={currentStep === 'DESTINATION_PREVIEW' ? 15 : 14}
               onMapLoad={(map) => {
                 riderMapRef.current = map;
               }}
@@ -742,22 +835,24 @@ function RiderContent() {
           {/* Normal Mode Map Layers (hidden during Center-Pin manual picker mode) */}
           {currentStep !== 'MANUAL_PIN_PICKER' && (
             <>
-              {/* Pickup / Starting Position Marker */}
-              <LocationPicker
-                currentPin={pickupCoord}
-                label={isTripActive || rideStatus === 'IN_PROGRESS' ? 'Starting Position' : 'Pickup'}
-                draggable={!rideStatus || currentStep === 'LOCATION_SEARCH'}
-                onPinChange={(pos: { lat: number; lng: number }) => {
-                  setPickupCoord({ lat: pos.lat, lng: pos.lng });
-                  setManualPin(pos.lat, pos.lng);
-                }}
-              />
+              {/* Pickup / Starting Position Marker (hidden in DESTINATION_PREVIEW) */}
+              {currentStep !== 'DESTINATION_PREVIEW' && (
+                <LocationPicker
+                  currentPin={pickupCoord}
+                  label={isTripActive || rideStatus === 'IN_PROGRESS' ? 'Starting Position' : 'Pickup'}
+                  draggable={!rideStatus || currentStep === 'LOCATION_SEARCH'}
+                  onPinChange={(pos: { lat: number; lng: number }) => {
+                    setPickupCoord({ lat: pos.lat, lng: pos.lng });
+                    setManualPin(pos.lat, pos.lng);
+                  }}
+                />
+              )}
 
-              {/* Dropoff Marker if selected */}
+              {/* Dropoff / Destination Marker if selected */}
               {dropoffCoord && (
                 <LocationPicker
                   currentPin={dropoffCoord}
-                  label="Dropoff"
+                  label={currentStep === 'DESTINATION_PREVIEW' ? 'Destination Point' : 'Dropoff'}
                 />
               )}
 
@@ -775,8 +870,8 @@ function RiderContent() {
                   />
                 )}
 
-              {/* Straight route line to destination during active trip, arrival, or fare selector */}
-              {dropoffCoord && (
+              {/* Straight route line to destination during active trip, arrival, or fare selector (HIDDEN during DESTINATION_PREVIEW) */}
+              {currentStep !== 'DESTINATION_PREVIEW' && dropoffCoord && (
                 <RouteLayer
                   id="destination-straight-line"
                   coordinates={
@@ -873,7 +968,7 @@ function RiderContent() {
                     {pinPickerTarget === 'pickup' ? 'Pickup Location' : 'Destination'}
                   </span>
                   <p className="text-sm font-semibold text-white truncate max-w-xs">
-                    {pinPickerTarget === 'pickup' ? 'Banani / Mohakhali' : 'Dhaka Destination'}
+                    {pinPickerTarget === 'pickup' ? pickupText || 'Mohakhali' : dropoffText || 'Dhaka Destination'}
                   </p>
                   <p className="text-[11px] font-mono text-neutral-400">
                     {centerPinCoord.lat.toFixed(5)}, {centerPinCoord.lng.toFixed(5)}
@@ -897,6 +992,42 @@ function RiderContent() {
               </button>
             </div>
           </div>
+        ) : currentStep === 'DESTINATION_PREVIEW' ? (
+          /* Step: DESTINATION PREVIEW PIN CARD (No Route, Centered Pin on Destination) */
+          <div className="mt-auto pointer-events-auto">
+            <div className="bg-neutral-950/95 border border-neutral-800 rounded-3xl p-4 shadow-2xl backdrop-blur-md space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="truncate flex-1 mr-2">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-emerald-400 font-bold block">
+                    Destination Point on Map
+                  </span>
+                  <p className="text-sm font-bold text-white truncate">
+                    {dropoffText || 'Destination'}
+                  </p>
+                  {dropoffCoord && (
+                    <p className="text-[11px] font-mono text-neutral-400">
+                      {dropoffCoord.lat.toFixed(5)}, {dropoffCoord.lng.toFixed(5)}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('LOCATION_SEARCH')}
+                  className="px-3 py-1.5 text-xs text-neutral-300 hover:text-white bg-neutral-900 border border-neutral-800 rounded-xl transition-colors shrink-0 font-medium"
+                >
+                  Change
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentStep('FARE_SELECT')}
+                className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <span>Confirm Destination & View Fare</span>
+              </button>
+            </div>
+          </div>
         ) : isConfirmingRide ? (
           /* Step: CONFIRMING / DISPATCHING LOADING STATE */
           <div className="my-auto pointer-events-auto">
@@ -909,7 +1040,7 @@ function RiderContent() {
               <div>
                 <h3 className="text-base font-bold text-white">Requesting Ride...</h3>
                 <p className="text-xs text-neutral-400 mt-1">
-                  Connecting with nearby drivers in Banani / Mohakhali
+                  Connecting with nearby drivers in Mohakhali
                 </p>
               </div>
               <div className="px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs font-mono text-emerald-400 inline-block">

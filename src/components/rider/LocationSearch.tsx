@@ -25,6 +25,9 @@ export interface LocationSearchProps {
   onSelectSuggestion?: (item: any) => void;
   onShowOnMap?: (item: any) => void;
   suggestions?: any[];
+  pickupSuggestions?: LocationSuggestion[];
+  onSelectPickupSuggestion?: (item: any) => void;
+  initialFocusField?: 'pickup' | 'dropoff';
   isAiSearched?: boolean;
   error?: string | null;
   isLoading?: boolean;
@@ -43,6 +46,21 @@ const DEFAULT_RECENT_SEARCHES: LocationSuggestion[] = [
   { displayName: 'Hazrat Shahjalal International Airport', lat: 23.8433, lng: 90.4029, category: 'Transit' },
 ];
 
+const DEFAULT_DHAKA_PICKUPS: LocationSuggestion[] = [
+  { displayName: 'Mohakhali, Dhaka', lat: 23.778363865941, lng: 90.39804578897022, category: 'Default Hub' },
+  { displayName: 'Mohakhali DOHS, Dhaka', lat: 23.7845, lng: 90.3920, category: 'Residential' },
+  { displayName: 'Mohakhali Bus Terminal, Dhaka', lat: 23.7770, lng: 90.3985, category: 'Transit Hub' },
+  { displayName: 'Banani Road 11, Dhaka', lat: 23.7901, lng: 90.4062, category: 'Commercial' },
+  { displayName: 'Gulshan 1 Circle, Dhaka', lat: 23.7788, lng: 90.4172, category: 'Commercial' },
+  { displayName: 'Gulshan 2 Circle, Dhaka', lat: 23.7938, lng: 90.4143, category: 'Commercial' },
+  { displayName: 'Dhanmondi 27, Dhaka', lat: 23.7461, lng: 90.3742, category: 'Residential' },
+  { displayName: 'Farmgate Bus Stand, Dhaka', lat: 23.7697, lng: 90.3871, category: 'Transit' },
+  { displayName: 'Kawran Bazar, Dhaka', lat: 23.7516, lng: 90.3938, category: 'Commercial' },
+  { displayName: 'Uttara Sector 3, Dhaka', lat: 23.8729, lng: 90.3984, category: 'Transit' },
+  { displayName: 'Mirpur 10 Circle, Dhaka', lat: 23.8069, lng: 90.3687, category: 'Transit' },
+  { displayName: 'Bashundhara R/A, Dhaka', lat: 23.8151, lng: 90.4255, category: 'Residential' },
+];
+
 export function LocationSearch({
   pickupText,
   dropoffText,
@@ -57,6 +75,9 @@ export function LocationSearch({
   onSelectSuggestion,
   onShowOnMap,
   suggestions = [],
+  pickupSuggestions,
+  onSelectPickupSuggestion,
+  initialFocusField,
   isAiSearched = false,
   error,
   isLoading = false,
@@ -67,6 +88,52 @@ export function LocationSearch({
   onConfirm,
 }: LocationSearchProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [isPickupOverlayOpen, setIsPickupOverlayOpen] = useState<boolean>(false);
+  const pickupInputRef = React.useRef<HTMLInputElement | null>(null);
+  const pickupContainerRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Focus pickup input on mount if initialFocusField is set to 'pickup'
+  React.useEffect(() => {
+    if (initialFocusField === 'pickup' && pickupInputRef.current) {
+      pickupInputRef.current.focus();
+      setIsPickupOverlayOpen(true);
+    }
+  }, [initialFocusField]);
+
+  // Click outside listener for pickup overlay
+  React.useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        pickupContainerRef.current &&
+        !pickupContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsPickupOverlayOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Filter pickup suggestions based on current pickupText
+  const activePickupSuggestions = React.useMemo(() => {
+    const pool =
+      pickupSuggestions && pickupSuggestions.length > 0
+        ? pickupSuggestions
+        : DEFAULT_DHAKA_PICKUPS;
+    const query = pickupText.trim().toLowerCase();
+    if (!query) return pool.slice(0, 6);
+    return pool
+      .filter((p) => p.displayName.toLowerCase().includes(query))
+      .slice(0, 6);
+  }, [pickupSuggestions, pickupText]);
+
+  const handleSelectPickupItem = (item: LocationSuggestion) => {
+    onPickupChange(item.displayName);
+    if (onSelectPickupSuggestion) {
+      onSelectPickupSuggestion(item);
+    }
+    setIsPickupOverlayOpen(false);
+  };
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -88,13 +155,15 @@ export function LocationSearch({
   const handleShowOnMapClick = (item: any, idx: number) => {
     setSelectedIdx(idx);
     onDropoffChange(item.displayName || item.name);
-    if (onSelectSuggestion) {
-      onSelectSuggestion(item);
-    }
     if (onShowOnMap) {
       onShowOnMap(item);
-    } else if (onConfirm) {
-      onConfirm();
+    } else {
+      if (onSelectSuggestion) {
+        onSelectSuggestion(item);
+      }
+      if (onConfirm) {
+        onConfirm();
+      }
     }
   };
 
@@ -173,14 +242,56 @@ export function LocationSearch({
                 <span>Pickup Point</span>
               </label>
 
-              <div className="relative">
+              <div ref={pickupContainerRef} className="relative">
                 <input
+                  ref={pickupInputRef}
                   type="text"
                   value={pickupText}
-                  onChange={(e) => onPickupChange(e.target.value)}
-                  placeholder="Enter pickup or choose live/manual below"
+                  onChange={(e) => {
+                    onPickupChange(e.target.value);
+                    setIsPickupOverlayOpen(true);
+                  }}
+                  onFocus={() => setIsPickupOverlayOpen(true)}
+                  placeholder="Search pickup location (e.g. Mohakhali, Banani)..."
                   className="w-full bg-neutral-900 border border-neutral-750 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs text-neutral-100 placeholder-neutral-500 outline-none transition-colors"
                 />
+
+                {/* Pickup Suggestions Dropdown Overlay */}
+                {isPickupOverlayOpen && activePickupSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-neutral-950 border border-neutral-750 rounded-2xl shadow-2xl backdrop-blur-md divide-y divide-neutral-850">
+                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-neutral-500 bg-neutral-900/50">
+                      Suggested Pickup Points
+                    </div>
+                    {activePickupSuggestions.map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleSelectPickupItem(item);
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-neutral-850 active:bg-neutral-800 flex items-center justify-between gap-2.5 transition-colors group"
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <div className="w-6 h-6 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                            <MapPin className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="truncate">
+                            <span className="text-xs font-semibold text-neutral-200 group-hover:text-emerald-300 block truncate">
+                              {item.displayName}
+                            </span>
+                            <span className="text-[10px] text-neutral-500 block truncate">
+                              {item.category || 'Dhaka Location'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          Set Pickup
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Options to Choose: Live Location or Manual Location */}
@@ -246,6 +357,12 @@ export function LocationSearch({
                     type="text"
                     value={dropoffText}
                     onChange={(e) => onDropoffChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSubmit();
+                      }
+                    }}
                     placeholder={
                       aiMode
                         ? "Ask AI: 'Old Dhaka Biryani' or 'Behind Gulshan 2 KFC'"

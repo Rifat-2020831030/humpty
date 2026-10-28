@@ -18,7 +18,7 @@ const VEHICLE_DESCRIPTIONS: Record<VehicleType, { label: string; tag: string; st
   },
   CNG: {
     label: 'CNG',
-    tag: 'Dhaka Icon',
+    tag: 'Budget-Friendly',
     startPrice: 70,
   },
   CAR: {
@@ -32,8 +32,8 @@ export function ServiceTiles({ selected, onSelect, className = '' }: ServiceTile
   return (
     <div className={`grid grid-cols-3 gap-2.5 ${className}`}>
       {VEHICLE_TYPES.map((type) => {
-        const rateInfo = VEHICLE_RATES[type];
         const desc = VEHICLE_DESCRIPTIONS[type];
+        const rateInfo = VEHICLE_RATES[type];
         const isSelected = selected === type;
 
         return (
